@@ -29,15 +29,18 @@ window.openGoogleMaps = function(lat, lng, label = '') {
   window.openMapsUrl(url);
 };
 
-window.openDirectionsTo = function(lat, lng, address = '') {
+window.openDirectionsTo = function(lat, lng, address = '', originLat = null, originLng = null) {
   const numLat = Number(lat);
   const numLng = Number(lng);
   let url = '';
 
+  const hasOrigin = originLat !== null && originLng !== null && !isNaN(Number(originLat)) && !isNaN(Number(originLng)) && Number(originLat) !== 0 && Number(originLng) !== 0;
+  const originParam = hasOrigin ? `&origin=${Number(originLat)},${Number(originLng)}` : '';
+
   if (!isNaN(numLat) && !isNaN(numLng) && numLat !== 0 && numLng !== 0) {
-    url = `https://www.google.com/maps/dir/?api=1&destination=${numLat},${numLng}&travelmode=driving`;
+    url = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${numLat},${numLng}&travelmode=driving`;
   } else if (address && address.trim()) {
-    url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address.trim())}&travelmode=driving`;
+    url = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${encodeURIComponent(address.trim())}&travelmode=driving`;
   }
 
   if (url) {

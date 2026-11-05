@@ -76,7 +76,7 @@ window.showDriverPassQRModal = function({ id, label, name, plate, phone }) {
       <!-- Rendered QR Code -->
       <div class="flex flex-col items-center justify-center p-4 bg-white rounded-2xl shadow-inner border border-slate-200 max-w-[240px] mx-auto">
         <img src="${qrUrl}" width="200" height="200" alt="QR Pass" class="rounded-xl shadow-sm mx-auto" />
-        <div class="font-mono text-[10px] text-slate-500 mt-2 font-bold select-all tracking-wider">${payload}</div>
+        <div class="text-[11px] font-semibold text-emerald-600 mt-2 flex items-center justify-center gap-1">✓ Authorized Campus Gate Pass</div>
       </div>
 
       <p class="text-xs text-slate-500 dark:text-slate-400">
@@ -104,7 +104,7 @@ window.qrPayload = {
     container.innerHTML = `
       <div class="flex flex-col items-center justify-center p-2 bg-white rounded-xl">
         <img src="${qrUrl}" width="${size}" height="${size}" alt="QR Pass" class="rounded-lg shadow-sm mx-auto" />
-        <div class="font-mono text-[10px] text-slate-500 mt-2 font-bold tracking-wider select-all">${text}</div>
+        <div class="text-[11px] font-semibold text-emerald-600 mt-2 flex items-center justify-center gap-1">✓ Authorized Gate Pass</div>
       </div>
     `;
   }

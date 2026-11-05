@@ -118,25 +118,54 @@ class LiveMapPage {
   static attachEvents() {
     const firstBtn = document.getElementById('open-first-van-map-btn');
     if (firstBtn) {
-      firstBtn.onclick = () => {
-        const liveVan = (LiveMapPage.cachedFleet || []).find(v => v.live && v.lat !== 0) || (LiveMapPage.cachedFleet || [])[0];
-        if (liveVan && liveVan.lat && liveVan.lat !== 0) {
-          window.openGoogleMaps(liveVan.lat, liveVan.lng, liveVan.label);
-        } else {
-          window.showToast('No active vehicles currently broadcasting GPS. The driver must click "Start Journey" first.', 'warning');
+      firstBtn.onclick = async () => {
+        firstBtn.disabled = true;
+        try {
+          const lRes = await window.api.request('/api/locations');
+          const locations = lRes.locations || [];
+          const liveLoc = locations.find(l => l.live && Number(l.lat) !== 0) || locations[0];
+          if (liveLoc && Number(liveLoc.lat) !== 0) {
+            window.openGoogleMaps(liveLoc.lat, liveLoc.lng, liveLoc.van_label || 'Campus Fleet');
+          } else if (liveLoc && liveLoc.live) {
+            window.showToast('Journey is active! Waiting for initial GPS coordinates from driver device.', 'info');
+          } else {
+            window.showToast('No active vehicles currently broadcasting GPS. The driver must click "Start Journey" first.', 'warning');
+          }
+        } catch {
+          const liveVan = (LiveMapPage.cachedFleet || []).find(v => v.live && v.lat !== 0) || (LiveMapPage.cachedFleet || [])[0];
+          if (liveVan && liveVan.lat && liveVan.lat !== 0) {
+            window.openGoogleMaps(liveVan.lat, liveVan.lng, liveVan.label);
+          } else {
+            window.showToast('No active vehicles currently broadcasting GPS.', 'warning');
+          }
+        } finally {
+          firstBtn.disabled = false;
         }
       };
     }
 
     document.querySelectorAll('.view-van-map-btn').forEach(btn => {
-      btn.onclick = () => {
-        const lat = Number(btn.getAttribute('data-lat'));
-        const lng = Number(btn.getAttribute('data-lng'));
+      btn.onclick = async () => {
         const label = btn.getAttribute('data-label') || 'Van';
-        if (lat && lng && lat !== 0) {
-          window.openGoogleMaps(lat, lng, label);
-        } else {
-          window.showToast(`${label} has not broadcasted its live location yet. Tracking becomes active when driver clicks "Start Journey".`, 'warning');
+        try {
+          const lRes = await window.api.request('/api/locations');
+          const locations = lRes.locations || [];
+          const loc = locations.find(l => (l.van_label || '').toLowerCase() === label.toLowerCase()) || locations.find(l => l.live && Number(l.lat) !== 0);
+          if (loc && Number(loc.lat) !== 0) {
+            window.openGoogleMaps(loc.lat, loc.lng, loc.van_label || label);
+          } else if (loc && loc.live) {
+            window.showToast(`${label} journey is active! Acquiring driver GPS coordinates. Please tap again in 5 seconds.`, 'info');
+          } else {
+            window.showToast(`${label} is currently idle. Tracking becomes active when driver clicks "Start Journey".`, 'warning');
+          }
+        } catch {
+          const lat = Number(btn.getAttribute('data-lat'));
+          const lng = Number(btn.getAttribute('data-lng'));
+          if (lat && lng && lat !== 0) {
+            window.openGoogleMaps(lat, lng, label);
+          } else {
+            window.showToast(`${label} has not broadcasted its live location yet.`, 'warning');
+          }
         }
       };
     });

@@ -54,6 +54,11 @@ class DriverHomePage {
     const isActive = DriverHomePage.isJourneyActive;
     if (isActive && !DriverHomePage.watchId) {
       DriverHomePage.startRealGPSWatch(vanId);
+    } else if (!DriverHomePage.lastKnownLat && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        DriverHomePage.lastKnownLat = Number(pos.coords.latitude.toFixed(6));
+        DriverHomePage.lastKnownLng = Number(pos.coords.longitude.toFixed(6));
+      }, () => {}, { enableHighAccuracy: true, timeout: 5000 });
     }
 
     return `
@@ -172,17 +177,41 @@ class DriverHomePage {
         const address = decodeURIComponent(btn.getAttribute('data-address') || '');
         const name = decodeURIComponent(btn.getAttribute('data-name') || 'Student');
 
-        if (window.openDirectionsTo) {
-          window.openDirectionsTo(lat, lng, address);
-        } else {
-          let url = '';
-          if (lat && lng && Number(lat) !== 0) {
-            url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
-          } else if (address) {
-            url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}&travelmode=driving`;
+        const launch = (originLat, originLng) => {
+          if (window.openDirectionsTo) {
+            window.openDirectionsTo(lat, lng, address, originLat, originLng);
+          } else {
+            const originParam = (originLat && originLng) ? `&origin=${originLat},${originLng}` : '';
+            let url = '';
+            if (lat && lng && Number(lat) !== 0) {
+              url = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${lat},${lng}&travelmode=driving`;
+            } else if (address) {
+              url = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${encodeURIComponent(address)}&travelmode=driving`;
+            }
+            if (url) window.open(url, '_blank');
+            else window.showToast(`No address recorded for ${name}`, 'warning');
           }
-          if (url) window.open(url, '_blank');
-          else window.showToast(`No address recorded for ${name}`, 'warning');
+        };
+
+        if (DriverHomePage.lastKnownLat && DriverHomePage.lastKnownLng) {
+          launch(DriverHomePage.lastKnownLat, DriverHomePage.lastKnownLng);
+        } else if (navigator.geolocation) {
+          btn.innerHTML = '<span class="animate-spin">🔄</span> <span>Locating...</span>';
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              btn.innerHTML = '<span>🗺️</span> <span>Navigate to House</span>';
+              DriverHomePage.lastKnownLat = pos.coords.latitude;
+              DriverHomePage.lastKnownLng = pos.coords.longitude;
+              launch(pos.coords.latitude, pos.coords.longitude);
+            },
+            () => {
+              btn.innerHTML = '<span>🗺️</span> <span>Navigate to House</span>';
+              launch(null, null);
+            },
+            { enableHighAccuracy: true, timeout: 3000 }
+          );
+        } else {
+          launch(null, null);
         }
       };
     });
@@ -207,8 +236,12 @@ class DriverHomePage {
           return window.showToast('No valid student addresses found for routing', 'warning');
         }
 
+        const originParam = (DriverHomePage.lastKnownLat && DriverHomePage.lastKnownLng)
+          ? `&origin=${DriverHomePage.lastKnownLat},${DriverHomePage.lastKnownLng}`
+          : '';
+
         if (validStops.length === 1) {
-          const url = `https://www.google.com/maps/dir/?api=1&destination=${validStops[0]}&travelmode=driving`;
+          const url = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${validStops[0]}&travelmode=driving`;
           window.openMapsUrl ? window.openMapsUrl(url) : window.open(url, '_blank');
           return;
         }
@@ -216,7 +249,7 @@ class DriverHomePage {
         // Multiple stops: last stop is destination, preceding stops are waypoints
         const destination = validStops[validStops.length - 1];
         const waypoints = validStops.slice(0, -1).join('|');
-        const url = `https://www.google.com/maps/dir/?api=1&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
+        const url = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
         window.openMapsUrl ? window.openMapsUrl(url) : window.open(url, '_blank');
       };
     }
@@ -298,11 +331,15 @@ class DriverHomePage {
           }
         };
 
-        if (navigator.geolocation) {
+        if (DriverHomePage.lastKnownLat && DriverHomePage.lastKnownLng) {
+          doStart(DriverHomePage.lastKnownLat, DriverHomePage.lastKnownLng);
+        } else if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
             (pos) => {
               const lat = Number(pos.coords.latitude.toFixed(6));
               const lng = Number(pos.coords.longitude.toFixed(6));
+              DriverHomePage.lastKnownLat = lat;
+              DriverHomePage.lastKnownLng = lng;
               doStart(lat, lng);
             },
             (err) => {

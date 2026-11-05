@@ -1192,8 +1192,12 @@ const server = http.createServer(async (req, res) => {
           `).run(generateId('notif'), child.parent_id, van.id, van.label, now, `${van.label} has started its journey at ${formattedTime}! Live GPS tracking is now active.`, now);
         }
 
-        broadcastEvent('journey_started', { vanId: van.id, label: van.label, lat: realLat, lng: realLng });
-        return sendJson(res, 200, { success: true, vanId: van.id, label: van.label, live: true, lat: realLat, lng: realLng });
+        const locRow = db.prepare('SELECT lat, lng FROM van_locations WHERE van_id = ?').get(van.id);
+        const finalLat = realLat !== null ? realLat : (locRow ? locRow.lat : 0);
+        const finalLng = realLng !== null ? realLng : (locRow ? locRow.lng : 0);
+
+        broadcastEvent('journey_started', { vanId: van.id, label: van.label, lat: finalLat, lng: finalLng });
+        return sendJson(res, 200, { success: true, vanId: van.id, label: van.label, live: true, lat: finalLat, lng: finalLng });
       }
 
       // DRIVER JOURNEY: Get Status

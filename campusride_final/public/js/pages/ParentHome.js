@@ -1,5 +1,10 @@
 // CampusRide — Parent Dashboard & Children Manager (§7.9, §8.3)
 class ParentHomePage {
+  static cachedVanLocation = null;
+  static assignedVanId = null;
+  static assignedVanLabel = null;
+  static hasAttachedSSE = false;
+
   static async render(user) {
     let children = [];
     let notifications = [];
@@ -16,16 +21,30 @@ class ParentHomePage {
       children = cRes.children || [];
       notifications = nRes.notifications || [];
       vans = vRes.drivers || [];
+      const locations = locRes.locations || [];
       
       const firstVanId = children[0]?.van_id;
-      if (firstVanId && locRes.locations) {
-        vanLocation = locRes.locations.find(l => l.van_id === firstVanId);
+      const firstVanLabel = children[0]?.van_label;
+
+      if (firstVanId) {
+        vanLocation = locations.find(l => l.van_id === firstVanId);
+      }
+      if (!vanLocation && firstVanLabel) {
+        vanLocation = locations.find(l => (l.van_label || '').toLowerCase() === firstVanLabel.toLowerCase());
+      }
+      if (!vanLocation) {
+        vanLocation = locations.find(l => l.live && Number(l.lat) !== 0);
+      }
+      if (!vanLocation && locations.length > 0) {
+        vanLocation = locations[0];
       }
     } catch {}
 
-    const trackedVanLabel = children[0]?.van_label || 'Van';
-    const isLive = vanLocation && vanLocation.live && Number(vanLocation.lat) !== 0;
+    const trackedVanLabel = children[0]?.van_label || (vanLocation?.van_label) || 'Van 1';
+    const isLive = Boolean(vanLocation && vanLocation.live);
     ParentHomePage.cachedVanLocation = vanLocation;
+    ParentHomePage.assignedVanId = children[0]?.van_id || (vanLocation?.van_id);
+    ParentHomePage.assignedVanLabel = trackedVanLabel;
 
     return `
       <div class="max-w-4xl mx-auto px-4 py-6 space-y-6">
@@ -33,8 +52,8 @@ class ParentHomePage {
         <div class="bg-gradient-to-r from-blue-700 to-indigo-800 text-white p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
             <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-xs font-semibold mb-2">
-              <span class="w-2.5 h-2.5 rounded-full ${isLive ? 'bg-emerald-400 animate-ping' : 'bg-slate-400'}"></span>
-              ${isLive ? 'BUS ACTIVE & EN ROUTE' : 'BUS AT REST / IDLE'}
+              <span id="parent-status-dot" class="w-2.5 h-2.5 rounded-full ${isLive ? 'bg-emerald-400 animate-ping' : 'bg-slate-400'}"></span>
+              <span id="parent-status-label">${isLive ? 'BUS ACTIVE & EN ROUTE' : 'BUS AT REST / IDLE'}</span>
             </div>
             <h1 class="text-2xl sm:text-3xl font-black">Tracking: ${trackedVanLabel}</h1>
             <p class="text-xs sm:text-sm text-blue-100 mt-1">
@@ -47,7 +66,7 @@ class ParentHomePage {
           <div class="flex items-center gap-3">
             <button type="button" id="parent-track-maps-btn" class="cr-btn bg-white text-blue-900 hover:bg-blue-50 font-bold px-6 py-3.5 shadow-lg flex items-center gap-2 text-sm cursor-pointer select-none">
               <span>🗺️</span>
-              <span>${isLive ? 'Track Live Van in Maps' : 'View Van on Google Maps'}</span>
+              <span id="parent-track-btn-text">${isLive ? 'Track Live Van in Maps' : 'View Van on Google Maps'}</span>
             </button>
           </div>
         </div>
@@ -122,17 +141,77 @@ class ParentHomePage {
   }
 
   static attachEvents() {
-    // Track van in Google Maps
+    // Real-time Track van in Google Maps (fetches fresh server GPS on every click)
     const trackMapsBtn = document.getElementById('parent-track-maps-btn');
     if (trackMapsBtn) {
-      trackMapsBtn.onclick = () => {
-        const loc = ParentHomePage.cachedVanLocation;
-        if (loc && loc.lat && loc.lng && Number(loc.lat) !== 0) {
-          window.openGoogleMaps(loc.lat, loc.lng, loc.van_label || 'Campus Van');
-        } else {
-          window.showToast('Van has not broadcasted its live GPS position yet. Tracking becomes active when driver clicks "Start Journey".', 'warning');
+      trackMapsBtn.onclick = async () => {
+        trackMapsBtn.disabled = true;
+        const originalHtml = trackMapsBtn.innerHTML;
+        trackMapsBtn.innerHTML = '<span class="animate-spin">🔄</span> Locating Van...';
+
+        try {
+          const locRes = await window.api.request('/api/locations');
+          const locations = locRes.locations || [];
+
+          let freshLoc = null;
+          const targetVanId = ParentHomePage.assignedVanId;
+          const targetLabel = ParentHomePage.assignedVanLabel;
+
+          if (targetVanId) {
+            freshLoc = locations.find(l => l.van_id === targetVanId);
+          }
+          if (!freshLoc && targetLabel) {
+            freshLoc = locations.find(l => (l.van_label || '').toLowerCase() === targetLabel.toLowerCase());
+          }
+          if (!freshLoc) {
+            freshLoc = locations.find(l => l.live && Number(l.lat) !== 0);
+          }
+          if (!freshLoc && locations.length > 0) {
+            freshLoc = locations[0];
+          }
+
+          if (freshLoc) {
+            ParentHomePage.cachedVanLocation = freshLoc;
+          }
+
+          if (freshLoc && Number(freshLoc.lat) !== 0 && Number(freshLoc.lng) !== 0) {
+            window.openGoogleMaps(freshLoc.lat, freshLoc.lng, freshLoc.van_label || 'Campus Van');
+          } else if (freshLoc && freshLoc.live) {
+            window.showToast('Driver has started the journey! Waiting for initial GPS satellite signal from driver device. Please tap again in 5 seconds.', 'info');
+          } else {
+            window.showToast('Van is currently at rest. Live GPS tracking becomes active as soon as the driver clicks "Start Journey".', 'warning');
+          }
+        } catch (err) {
+          const loc = ParentHomePage.cachedVanLocation;
+          if (loc && loc.lat && loc.lng && Number(loc.lat) !== 0) {
+            window.openGoogleMaps(loc.lat, loc.lng, loc.van_label || 'Campus Van');
+          } else {
+            window.showToast('Could not reach server to track van. Please check internet connection.', 'error');
+          }
+        } finally {
+          trackMapsBtn.disabled = false;
+          trackMapsBtn.innerHTML = originalHtml;
         }
       };
+    }
+
+    // Attach SSE listener to update parent banner in real-time
+    if (window.api && window.api.on && !ParentHomePage.hasAttachedSSE) {
+      ParentHomePage.hasAttachedSSE = true;
+
+      window.api.on('journey_started', (data) => {
+        ParentHomePage.updateLiveStatusUI(true, data);
+        window.showToast(`🚀 ${data.label || 'Van'} has started journey! Live GPS is now tracking.`, 'info');
+      });
+
+      window.api.on('location_update', (data) => {
+        ParentHomePage.updateLiveStatusUI(true, data);
+      });
+
+      window.api.on('journey_ended', (data) => {
+        ParentHomePage.updateLiveStatusUI(false, data);
+        window.showToast(`🛑 ${data.label || 'Van'} journey ended.`, 'info');
+      });
     }
 
     // Add child modal
@@ -166,6 +245,30 @@ class ParentHomePage {
           window.location.reload();
         } catch {}
       };
+    }
+  }
+
+  static updateLiveStatusUI(isLive, data) {
+    if (data && data.lat && data.lng) {
+      if (!ParentHomePage.cachedVanLocation) ParentHomePage.cachedVanLocation = {};
+      ParentHomePage.cachedVanLocation.lat = data.lat;
+      ParentHomePage.cachedVanLocation.lng = data.lng;
+      ParentHomePage.cachedVanLocation.live = isLive ? 1 : 0;
+      if (data.label) ParentHomePage.cachedVanLocation.van_label = data.label;
+    }
+
+    const dot = document.getElementById('parent-status-dot');
+    const label = document.getElementById('parent-status-label');
+    const trackBtnText = document.getElementById('parent-track-btn-text');
+
+    if (dot) {
+      dot.className = `w-2.5 h-2.5 rounded-full ${isLive ? 'bg-emerald-400 animate-ping' : 'bg-slate-400'}`;
+    }
+    if (label) {
+      label.textContent = isLive ? 'BUS ACTIVE & EN ROUTE' : 'BUS AT REST / IDLE';
+    }
+    if (trackBtnText) {
+      trackBtnText.textContent = isLive ? 'Track Live Van in Maps' : 'View Van on Google Maps';
     }
   }
 

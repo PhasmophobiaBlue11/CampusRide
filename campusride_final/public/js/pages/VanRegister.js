@@ -70,7 +70,7 @@ class VanRegisterPage {
                   <th class="py-2.5">Driver / Staff Member</th>
                   <th class="py-2.5">Event Type</th>
                   <th class="py-2.5">Gate Operator</th>
-                  <th class="py-2.5">Pass Identifier</th>
+                  <th class="py-2.5">Pass Status</th>
                 </tr>
               </thead>
               <tbody id="logs-table-body" class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -151,7 +151,7 @@ class VanRegisterPage {
             </span>
           </td>
           <td class="py-3 text-slate-500">${l.scanned_by || 'Gate Officer'}</td>
-          <td class="py-3 font-mono text-[11px] text-slate-400 truncate max-w-[150px]">${l.qr_identifier || '—'}</td>
+          <td class="py-3"><span class="text-emerald-600 dark:text-emerald-400 text-xs font-semibold">✓ Verified Pass</span></td>
         </tr>
       `).join('');
     } catch (e) {
