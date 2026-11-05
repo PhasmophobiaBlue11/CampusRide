@@ -1,10 +1,29 @@
 // CampusRide — Responsive Sticky Header & Global Controls
 class HeaderComponent {
   static render(user) {
-    const roleName = user.role === 'admin' ? 'Admin' :
-                     user.driverProfile ? 'Driver' :
-                     user.parentProfile ? 'Parent' :
-                     user.staffStatus === 'approved' ? 'Staff (Gate)' : 'Pending Staff';
+    const isDriver = Boolean(user.driverProfile && user.role !== 'admin');
+    const isParent = Boolean(user.parentProfile && user.role !== 'admin');
+    const isAdmin = user.role === 'admin';
+    const isStaff = !isDriver && !isParent && !isAdmin;
+
+    const appName = isDriver ? 'CampusRide Driver' :
+                    isParent ? 'CampusRide Parent' :
+                    isAdmin ? 'CampusRide Admin' : 'CampusRide Gate';
+
+    const roleBadgeText = isAdmin ? '🛡️ Master Admin' :
+                          isDriver ? '🚌 Van Driver' :
+                          isParent ? '👨‍👩‍👧 Parent' :
+                          user.staffStatus === 'approved' ? '🛂 Gate Security' : '⏳ Pending Staff';
+
+    const roleBadgeClass = isAdmin ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800' :
+                           isDriver ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800' :
+                           isParent ? 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800' :
+                           'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-800';
+
+    const logoGradient = isDriver ? 'bg-gradient-to-tr from-amber-500 to-orange-600 shadow-amber-500/20' :
+                         isParent ? 'bg-gradient-to-tr from-indigo-600 to-purple-600 shadow-indigo-500/20' :
+                         isAdmin ? 'bg-gradient-to-tr from-purple-700 to-indigo-700 shadow-purple-500/20' :
+                         'bg-gradient-to-tr from-blue-700 to-indigo-600 shadow-blue-500/20';
 
     const currentTheme = document.documentElement.getAttribute('data-theme') || 'ocean';
     const isDark = document.documentElement.classList.contains('dark');
@@ -24,7 +43,7 @@ class HeaderComponent {
             ` : ''}
 
             <a href="#/" class="flex items-center gap-2.5 text-inherit no-underline group">
-              <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-700 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition">
+              <div class="w-10 h-10 rounded-xl ${logoGradient} flex items-center justify-center text-white shadow-md group-hover:scale-105 transition">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M8 6v6"></path><path d="M15 6v6"></path><path d="M2 12h19.6"></path>
                   <path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 7.3 19.6 7 19 7H5c-.6 0-1.1.3-1.4.8L2.2 12.8c-.1.4-.2.8-.2 1.2 0 .4.1.8.2 1.2.3 1.1.8 2.8.8 2.8h3"></path>
@@ -33,9 +52,9 @@ class HeaderComponent {
               </div>
               <div>
                 <div class="font-bold text-lg leading-tight flex items-center gap-1.5">
-                  <span>CampusRide</span>
-                  <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
-                    ${roleName}
+                  <span>${appName}</span>
+                  <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${roleBadgeClass}">
+                    ${roleBadgeText}
                   </span>
                 </div>
                 <p class="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block">${user.display_name || user.email}</p>

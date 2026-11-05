@@ -21,37 +21,78 @@
     const hash = window.location.hash.slice(1) || '/';
     const path = hash.split('?')[0];
 
-    // Public Routes
-    if (path === '/login') {
+    // Public Routes & Dedicated Portals
+    if (path === '/login' || path === '/driver-login' || path === '/driver' || path === '/parent-login' || path === '/parent' || path === '/staff-login' || path === '/staff' || path === '/admin-login') {
+      if (path === '/driver' || path === '/driver-login') {
+        window.LoginPage.activePortal = 'driver';
+      } else if (path === '/parent' || path === '/parent-login') {
+        window.LoginPage.activePortal = 'parent';
+      } else if (path === '/staff' || path === '/staff-login' || path === '/admin-login') {
+        window.LoginPage.activePortal = 'staff';
+      }
       appEl.innerHTML = window.LoginPage.render();
       window.LoginPage.attachEvents();
+      if (window.i18n) window.i18n.translateDOM();
       return;
     }
     if (path === '/register-staff') {
       appEl.innerHTML = window.StaffRegisterPage.render();
       window.StaffRegisterPage.attachEvents();
+      if (window.i18n) window.i18n.translateDOM();
       return;
     }
     if (path === '/register-driver') {
       appEl.innerHTML = window.DriverRegisterPage.render();
       window.DriverRegisterPage.attachEvents();
+      if (window.i18n) window.i18n.translateDOM();
       return;
     }
     if (path === '/register-parent') {
       appEl.innerHTML = window.ParentRegisterPage.render();
       window.ParentRegisterPage.attachEvents();
+      if (window.i18n) window.i18n.translateDOM();
       return;
     }
     if (path === '/forgot-password') {
       appEl.innerHTML = window.ForgotPasswordPage.render();
       window.ForgotPasswordPage.attachEvents();
+      if (window.i18n) window.i18n.translateDOM();
       return;
     }
 
     // Protected Routes: Require User Auth
     const user = await window.api.fetchMe();
     if (!user) {
-      window.location.hash = '#/login';
+      if (path.includes('driver')) window.location.hash = '#/driver-login';
+      else if (path.includes('parent')) window.location.hash = '#/parent-login';
+      else window.location.hash = '#/login';
+      return;
+    }
+
+    // Strict Role-Based Routing & App Isolation Guards
+    const isDriver = Boolean(user.driverProfile && user.role !== 'admin');
+    const isParent = Boolean(user.parentProfile && user.role !== 'admin');
+    const isAdmin = user.role === 'admin';
+
+    // 1. Driver App Isolation: Only console & settings allowed
+    if (isDriver) {
+      if (path !== '/' && path !== '' && path !== '/settings') {
+        window.location.hash = '#/';
+        return;
+      }
+    }
+
+    // 2. Parent App Isolation: Only child tracking, contacts & settings allowed
+    if (isParent) {
+      if (path !== '/' && path !== '' && path !== '/directories' && path !== '/settings') {
+        window.location.hash = '#/';
+        return;
+      }
+    }
+
+    // 3. Gate Staff Isolation: Cannot access master admin suite
+    if (!isAdmin && path === '/admin') {
+      window.location.hash = '#/';
       return;
     }
 
@@ -137,36 +178,102 @@
       `;
     }
 
-    // Render Shell with Header, Page Content, and Mobile Bottom Navigation
+    // Build Role-Specific Mobile Bottom Navigation Bar (§7.1)
+    let bottomNavHtml = '';
+
+    if (isDriver) {
+      // 🚌 Driver App Navigation: Console, Settings
+      bottomNavHtml = `
+        <nav class="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-8 py-2.5 flex items-center justify-around text-[11px] font-bold text-slate-500 shadow-lg">
+          <a href="#/" class="flex flex-col items-center gap-1 ${path === '/' || path === '' ? 'text-amber-600 dark:text-amber-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-xl">🚌</span>
+            <span>Driver Console</span>
+          </a>
+          <a href="#/settings" class="flex flex-col items-center gap-1 ${path === '/settings' ? 'text-amber-600 dark:text-amber-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-xl">⚙️</span>
+            <span>Settings</span>
+          </a>
+        </nav>
+      `;
+    } else if (isParent) {
+      // 👨‍👩‍👧 Parent App Navigation: Live Van Radar, Helpline, Settings
+      bottomNavHtml = `
+        <nav class="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-6 py-2.5 flex items-center justify-around text-[11px] font-bold text-slate-500 shadow-lg">
+          <a href="#/" class="flex flex-col items-center gap-1 ${path === '/' || path === '' ? 'text-indigo-600 dark:text-indigo-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-xl">👨‍👩‍👧</span>
+            <span>Van Radar</span>
+          </a>
+          <a href="#/directories" class="flex flex-col items-center gap-1 ${path === '/directories' ? 'text-indigo-600 dark:text-indigo-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-xl">📞</span>
+            <span>Helpline</span>
+          </a>
+          <a href="#/settings" class="flex flex-col items-center gap-1 ${path === '/settings' ? 'text-indigo-600 dark:text-indigo-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-xl">⚙️</span>
+            <span>Settings</span>
+          </a>
+        </nav>
+      `;
+    } else if (isAdmin) {
+      // 🛡️ Admin Suite Navigation
+      bottomNavHtml = `
+        <nav class="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-2 py-2 flex items-center justify-around text-[10px] font-bold text-slate-500 shadow-lg">
+          <a href="#/" class="flex flex-col items-center gap-1 ${path === '/' || path === '' || path === '/admin' ? 'text-purple-600 dark:text-purple-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-lg">🛡️</span>
+            <span>Admin</span>
+          </a>
+          <a href="#/entry-exit-scanner" class="flex flex-col items-center gap-1 ${path === '/entry-exit-scanner' ? 'text-purple-600 dark:text-purple-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-lg">📷</span>
+            <span>Gate Scan</span>
+          </a>
+          <a href="#/drivers" class="flex flex-col items-center gap-1 ${path === '/drivers' ? 'text-purple-600 dark:text-purple-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-lg">🚌</span>
+            <span>Drivers</span>
+          </a>
+          <a href="#/directories" class="flex flex-col items-center gap-1 ${path === '/directories' ? 'text-purple-600 dark:text-purple-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-lg">👥</span>
+            <span>Staff</span>
+          </a>
+          <a href="#/settings" class="flex flex-col items-center gap-1 ${path === '/settings' ? 'text-purple-600 dark:text-purple-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-lg">⚙️</span>
+            <span>Settings</span>
+          </a>
+        </nav>
+      `;
+    } else {
+      // 🏢 Gate Staff Navigation
+      bottomNavHtml = `
+        <nav class="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-2 py-2 flex items-center justify-around text-[10px] font-bold text-slate-500 shadow-lg">
+          <a href="#/" class="flex flex-col items-center gap-1 ${path === '/' || path === '' ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-lg">🏢</span>
+            <span>Gate Desk</span>
+          </a>
+          <a href="#/entry-exit-scanner" class="flex flex-col items-center gap-1 ${path === '/entry-exit-scanner' ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-lg">📷</span>
+            <span>Scan Pass</span>
+          </a>
+          <a href="#/registration-scanner" class="flex flex-col items-center gap-1 ${path === '/registration-scanner' ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-lg">📝</span>
+            <span>Register</span>
+          </a>
+          <a href="#/directories" class="flex flex-col items-center gap-1 ${path === '/directories' ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-lg">👥</span>
+            <span>Contacts</span>
+          </a>
+          <a href="#/settings" class="flex flex-col items-center gap-1 ${path === '/settings' ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-lg">⚙️</span>
+            <span>Settings</span>
+          </a>
+        </nav>
+      `;
+    }
+
+    // Render Shell with Header, Page Content, and Role Mobile Bottom Navigation
     appEl.innerHTML = `
       ${window.HeaderComponent.render(user)}
       <main class="pb-24 sm:pb-12">
         ${pageHtml}
       </main>
-
-      <!-- Mobile Bottom Navigation Bar (Thumb Friendly) -->
-      <nav class="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-3 py-2 flex items-center justify-around text-[10px] font-semibold text-slate-500">
-        <a href="#/" class="flex flex-col items-center gap-1 ${path === '/' ? 'text-blue-600 dark:text-blue-400 font-bold' : ''}">
-          <span class="text-lg">🏠</span>
-          <span>Home</span>
-        </a>
-        <a href="#/entry-exit-scanner" class="flex flex-col items-center gap-1 ${path === '/entry-exit-scanner' ? 'text-blue-600 dark:text-blue-400 font-bold' : ''}">
-          <span class="text-lg">📷</span>
-          <span>Scan</span>
-        </a>
-        <a href="#/live-map" class="flex flex-col items-center gap-1 ${path === '/live-map' ? 'text-blue-600 dark:text-blue-400 font-bold' : ''}">
-          <span class="text-lg">🗺️</span>
-          <span>Map</span>
-        </a>
-        <a href="#/directories" class="flex flex-col items-center gap-1 ${path === '/directories' ? 'text-blue-600 dark:text-blue-400 font-bold' : ''}">
-          <span class="text-lg">👥</span>
-          <span>Contacts</span>
-        </a>
-        <a href="#/settings" class="flex flex-col items-center gap-1 ${path === '/settings' ? 'text-blue-600 dark:text-blue-400 font-bold' : ''}">
-          <span class="text-lg">⚙️</span>
-          <span>Settings</span>
-        </a>
-      </nav>
+      ${bottomNavHtml}
     `;
 
     window.HeaderComponent.attachEvents(user);
