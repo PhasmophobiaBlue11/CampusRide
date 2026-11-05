@@ -36,10 +36,12 @@ class LoginPage {
                      isAdmin ? 'bg-purple-700 hover:bg-purple-600 text-white shadow-purple-500/25' :
                      'cr-btn-primary shadow-blue-500/25';
 
-    const emailPlaceholder = isDriver ? 'driver@campusride.edu' :
-                             isParent ? 'parent@campusride.edu' :
-                             isAdmin ? 'adphasmo@gmail.com' :
-                             'staff@campusride.edu';
+    const usernamePlaceholder = isDriver ? 'e.g. Driver Ramesh' :
+                                isParent ? 'e.g. ParentXYZ' :
+                                isAdmin ? 'Admin2026' :
+                                'e.g. StaffSharma';
+
+    const savedUsername = isAdmin ? 'Admin2026' : (localStorage.getItem(`campusride_device_${role}_username`) || '');
 
     const registrationCta = isDriver ? `
       <div class="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-900/50 text-xs">
@@ -81,8 +83,8 @@ class LoginPage {
           <form id="login-form" class="space-y-4">
             <input type="hidden" id="login-target-role" value="${role}" />
             <div>
-              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email Address</label>
-              <input type="email" id="login-email" required class="cr-input" placeholder="${emailPlaceholder}" />
+              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Username</label>
+              <input type="text" id="login-username" required class="cr-input" placeholder="${usernamePlaceholder}" value="${savedUsername}" autocomplete="username" />
             </div>
 
             <div>
@@ -130,7 +132,7 @@ class LoginPage {
     if (form) {
       form.onsubmit = async (e) => {
         e.preventDefault();
-        const email = document.getElementById('login-email').value.trim();
+        const username = document.getElementById('login-username').value.trim();
         const password = document.getElementById('login-password').value;
         const targetRole = document.getElementById('login-target-role').value;
         const btn = document.getElementById('login-submit-btn');
@@ -139,11 +141,14 @@ class LoginPage {
         btn.textContent = 'Verifying...';
 
         try {
-          const user = await window.api.login(email, password, targetRole);
+          const user = await window.api.login(username, password, targetRole);
           window.showToast('Signed in successfully!', 'success');
           
           // Remember role in session
           localStorage.setItem('campusride_app_role', targetRole);
+          if (targetRole && targetRole !== 'admin') {
+            localStorage.setItem(`campusride_device_${targetRole}_username`, username);
+          }
 
           // Redirect to root of this app
           window.location.hash = '#/';

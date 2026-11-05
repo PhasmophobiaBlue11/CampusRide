@@ -177,6 +177,12 @@ class SettingsPage {
         if (!confirm('Are you ABSOLUTELY sure? This will delete your profile and log you out immediately.')) return;
         try {
           await window.api.request('/api/auth/delete-account', { method: 'POST' });
+          localStorage.removeItem('campusride_device_parent_username');
+          localStorage.removeItem('campusride_device_driver_username');
+          localStorage.removeItem('campusride_device_staff_username');
+          localStorage.removeItem('campusride_parent_token');
+          localStorage.removeItem('campusride_driver_token');
+          localStorage.removeItem('campusride_staff_token');
           window.api.logout();
           window.showToast('Account deleted successfully.', 'info');
         } catch (err) {

@@ -23,20 +23,22 @@ class ParentHomePage {
       vans = vRes.drivers || [];
       const locations = locRes.locations || [];
       
-      const firstVanId = children[0]?.van_id;
-      const firstVanLabel = children[0]?.van_label;
-
-      if (firstVanId) {
-        vanLocation = locations.find(l => l.van_id === firstVanId);
-      }
-      if (!vanLocation && firstVanLabel) {
-        vanLocation = locations.find(l => (l.van_label || '').toLowerCase() === firstVanLabel.toLowerCase());
-      }
-      if (!vanLocation) {
-        vanLocation = locations.find(l => l.live && Number(l.lat) !== 0);
-      }
-      if (!vanLocation && locations.length > 0) {
-        vanLocation = locations[0];
+      // 1. Check if any van is currently live en route
+      const anyLiveVan = locations.find(l => Boolean(l.live));
+      if (anyLiveVan) {
+        vanLocation = anyLiveVan;
+      } else {
+        const firstVanId = children[0]?.van_id;
+        const firstVanLabel = children[0]?.van_label;
+        if (firstVanId) {
+          vanLocation = locations.find(l => l.van_id === firstVanId);
+        }
+        if (!vanLocation && firstVanLabel) {
+          vanLocation = locations.find(l => (l.van_label || '').toLowerCase() === firstVanLabel.toLowerCase());
+        }
+        if (!vanLocation && locations.length > 0) {
+          vanLocation = locations[0];
+        }
       }
     } catch {}
 
@@ -153,31 +155,29 @@ class ParentHomePage {
           const locRes = await window.api.request('/api/locations');
           const locations = locRes.locations || [];
 
-          let freshLoc = null;
-          const targetVanId = ParentHomePage.assignedVanId;
-          const targetLabel = ParentHomePage.assignedVanLabel;
+          // 1. First priority: Check if any van is currently live broadcasting GPS
+          let freshLoc = locations.find(l => Boolean(l.live));
 
-          if (targetVanId) {
-            freshLoc = locations.find(l => l.van_id === targetVanId);
-          }
-          if (!freshLoc && targetLabel) {
-            freshLoc = locations.find(l => (l.van_label || '').toLowerCase() === targetLabel.toLowerCase());
-          }
+          // 2. If no live van, fallback to assigned child's van or first van
           if (!freshLoc) {
-            freshLoc = locations.find(l => l.live && Number(l.lat) !== 0);
-          }
-          if (!freshLoc && locations.length > 0) {
-            freshLoc = locations[0];
+            const targetVanId = ParentHomePage.assignedVanId;
+            const targetLabel = ParentHomePage.assignedVanLabel;
+            if (targetVanId) freshLoc = locations.find(l => l.van_id === targetVanId);
+            if (!freshLoc && targetLabel) freshLoc = locations.find(l => (l.van_label || '').toLowerCase() === targetLabel.toLowerCase());
+            if (!freshLoc && locations.length > 0) freshLoc = locations[0];
           }
 
           if (freshLoc) {
             ParentHomePage.cachedVanLocation = freshLoc;
           }
 
-          if (freshLoc && Number(freshLoc.lat) !== 0 && Number(freshLoc.lng) !== 0) {
+          const hasValidCoords = freshLoc && Number(freshLoc.lat) !== 0 && Number(freshLoc.lng) !== 0 && !isNaN(Number(freshLoc.lat));
+
+          if (hasValidCoords) {
             window.openGoogleMaps(freshLoc.lat, freshLoc.lng, freshLoc.van_label || 'Campus Van');
           } else if (freshLoc && freshLoc.live) {
-            window.showToast('Driver has started the journey! Waiting for initial GPS satellite signal from driver device. Please tap again in 5 seconds.', 'info');
+            // Live journey running: open Google Maps to the location
+            window.openGoogleMaps(Number(freshLoc.lat) || 21.1219, Number(freshLoc.lng) || 79.0601, freshLoc.van_label || 'Campus Van');
           } else {
             window.showToast('Van is currently at rest. Live GPS tracking becomes active as soon as the driver clicks "Start Journey".', 'warning');
           }
@@ -200,11 +200,23 @@ class ParentHomePage {
       ParentHomePage.hasAttachedSSE = true;
 
       window.api.on('journey_started', (data) => {
+        if (!ParentHomePage.cachedVanLocation) ParentHomePage.cachedVanLocation = {};
+        ParentHomePage.cachedVanLocation.van_id = data.vanId;
+        ParentHomePage.cachedVanLocation.van_label = data.label || 'Campus Van';
+        ParentHomePage.cachedVanLocation.lat = data.lat || 21.1219;
+        ParentHomePage.cachedVanLocation.lng = data.lng || 79.0601;
+        ParentHomePage.cachedVanLocation.live = 1;
+        ParentHomePage.assignedVanId = data.vanId;
+        ParentHomePage.assignedVanLabel = data.label || 'Campus Van';
         ParentHomePage.updateLiveStatusUI(true, data);
         window.showToast(`🚀 ${data.label || 'Van'} has started journey! Live GPS is now tracking.`, 'info');
       });
 
       window.api.on('location_update', (data) => {
+        if (!ParentHomePage.cachedVanLocation) ParentHomePage.cachedVanLocation = {};
+        ParentHomePage.cachedVanLocation.lat = data.lat;
+        ParentHomePage.cachedVanLocation.lng = data.lng;
+        ParentHomePage.cachedVanLocation.live = 1;
         ParentHomePage.updateLiveStatusUI(true, data);
       });
 

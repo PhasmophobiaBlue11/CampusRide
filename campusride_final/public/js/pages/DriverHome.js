@@ -3,29 +3,41 @@ class DriverHomePage {
   static isJourneyActive = false;
   static watchId = null;
   static currentVanId = null;
+  static currentVanLabel = null;
+  static currentVanPlate = null;
+  static driverName = null;
   static lastKnownLat = null;
   static lastKnownLng = null;
   static cachedStudents = [];
 
   static async render(user) {
+    DriverHomePage.driverName = user.display_name || user.username || 'Campus Driver';
     let vanId = user.driverProfile?.selected_van_id;
     let vanLabel = user.driverProfile?.selected_van_label || 'Assigned Van';
+    let vanPlate = 'Official Transit Pass';
 
-    // Fallback: If profile doesn't have van_id yet, fetch from drivers registry
-    if (!vanId) {
-      try {
-        const dRes = await window.api.request('/api/drivers?type=van');
-        if (dRes.drivers && dRes.drivers.length > 0) {
-          const match = dRes.drivers.find(d => d.driver_name === user.display_name) || dRes.drivers[0];
+    // Fetch drivers registry to get plate and match van
+    try {
+      const dRes = await window.api.request('/api/drivers?type=van');
+      if (dRes.drivers && dRes.drivers.length > 0) {
+        let match = null;
+        if (vanId) match = dRes.drivers.find(d => d.id === vanId);
+        if (!match && user.display_name) match = dRes.drivers.find(d => d.driver_name === user.display_name);
+        if (!match) match = dRes.drivers[0];
+
+        if (match) {
           vanId = match.id;
           vanLabel = match.label;
+          vanPlate = match.van_no || 'Official Transit Pass';
         }
-      } catch (e) {
-        console.warn('Could not resolve van:', e);
       }
+    } catch (e) {
+      console.warn('Could not resolve van:', e);
     }
 
     DriverHomePage.currentVanId = vanId;
+    DriverHomePage.currentVanLabel = vanLabel;
+    DriverHomePage.currentVanPlate = vanPlate;
 
     // Check live state from server
     if (vanId) {
@@ -177,46 +189,26 @@ class DriverHomePage {
         const address = decodeURIComponent(btn.getAttribute('data-address') || '');
         const name = decodeURIComponent(btn.getAttribute('data-name') || 'Student');
 
-        const launch = (originLat, originLng) => {
-          if (window.openDirectionsTo) {
-            window.openDirectionsTo(lat, lng, address, originLat, originLng);
-          } else {
-            const originParam = (originLat && originLng) ? `&origin=${originLat},${originLng}` : '';
-            let url = '';
-            if (lat && lng && Number(lat) !== 0) {
-              url = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${lat},${lng}&travelmode=driving`;
-            } else if (address) {
-              url = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${encodeURIComponent(address)}&travelmode=driving`;
-            }
-            if (url) window.open(url, '_blank');
-            else window.showToast(`No address recorded for ${name}`, 'warning');
-          }
-        };
-
-        if (DriverHomePage.lastKnownLat && DriverHomePage.lastKnownLng) {
-          launch(DriverHomePage.lastKnownLat, DriverHomePage.lastKnownLng);
-        } else if (navigator.geolocation) {
-          btn.innerHTML = '<span class="animate-spin">🔄</span> <span>Locating...</span>';
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              btn.innerHTML = '<span>🗺️</span> <span>Navigate to House</span>';
-              DriverHomePage.lastKnownLat = pos.coords.latitude;
-              DriverHomePage.lastKnownLng = pos.coords.longitude;
-              launch(pos.coords.latitude, pos.coords.longitude);
-            },
-            () => {
-              btn.innerHTML = '<span>🗺️</span> <span>Navigate to House</span>';
-              launch(null, null);
-            },
-            { enableHighAccuracy: true, timeout: 3000 }
-          );
+        // Launch directly using native Google Maps "Your location" as origin
+        if (window.openDirectionsTo) {
+          window.openDirectionsTo(lat, lng, address, null, null);
         } else {
-          launch(null, null);
+          let url = '';
+          if (lat && lng && Number(lat) !== 0) {
+            url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+          } else if (address) {
+            url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}&travelmode=driving`;
+          }
+          if (url) {
+            window.openMapsUrl ? window.openMapsUrl(url) : window.open(url, '_blank');
+          } else {
+            window.showToast(`No address or coordinates recorded for ${name}`, 'warning');
+          }
         }
       };
     });
 
-    // Route all student stops together
+    // Route all student stops together (starts from Driver's actual device location)
     const routeAllBtn = document.getElementById('driver-route-all-btn');
     if (routeAllBtn) {
       routeAllBtn.onclick = () => {
@@ -236,12 +228,8 @@ class DriverHomePage {
           return window.showToast('No valid student addresses found for routing', 'warning');
         }
 
-        const originParam = (DriverHomePage.lastKnownLat && DriverHomePage.lastKnownLng)
-          ? `&origin=${DriverHomePage.lastKnownLat},${DriverHomePage.lastKnownLng}`
-          : '';
-
         if (validStops.length === 1) {
-          const url = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${validStops[0]}&travelmode=driving`;
+          const url = `https://www.google.com/maps/dir/?api=1&destination=${validStops[0]}&travelmode=driving`;
           window.openMapsUrl ? window.openMapsUrl(url) : window.open(url, '_blank');
           return;
         }
@@ -249,39 +237,45 @@ class DriverHomePage {
         // Multiple stops: last stop is destination, preceding stops are waypoints
         const destination = validStops[validStops.length - 1];
         const waypoints = validStops.slice(0, -1).join('|');
-        const url = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
         window.openMapsUrl ? window.openMapsUrl(url) : window.open(url, '_blank');
       };
     }
 
-    // View driver's own location in Google Maps
+    // View driver's own location in Google Maps (fresh satellite acquisition)
     const selfMapBtn = document.getElementById('driver-view-self-map-btn');
     if (selfMapBtn) {
       selfMapBtn.onclick = () => {
-        if (DriverHomePage.lastKnownLat && DriverHomePage.lastKnownLng) {
-          window.openGoogleMaps(DriverHomePage.lastKnownLat, DriverHomePage.lastKnownLng, 'My Van Location');
-        } else if (navigator.geolocation) {
+        if (navigator.geolocation) {
           selfMapBtn.textContent = 'Acquiring GPS...';
           navigator.geolocation.getCurrentPosition(
             (pos) => {
               selfMapBtn.textContent = '📍 View My Location in Google Maps';
-              DriverHomePage.lastKnownLat = pos.coords.latitude;
-              DriverHomePage.lastKnownLng = pos.coords.longitude;
-              window.openGoogleMaps(pos.coords.latitude, pos.coords.longitude, 'My Van Location');
+              const lat = Number(pos.coords.latitude.toFixed(6));
+              const lng = Number(pos.coords.longitude.toFixed(6));
+              DriverHomePage.lastKnownLat = lat;
+              DriverHomePage.lastKnownLng = lng;
+              window.openGoogleMaps(lat, lng, 'My Van Location');
             },
             (err) => {
               selfMapBtn.textContent = '📍 View My Location in Google Maps';
-              window.showToast('Could not acquire device GPS. Please check location permissions.', 'error');
+              if (DriverHomePage.lastKnownLat && DriverHomePage.lastKnownLng) {
+                window.openGoogleMaps(DriverHomePage.lastKnownLat, DriverHomePage.lastKnownLng, 'My Van Location');
+              } else {
+                window.showToast('Could not acquire device GPS. Please check location permissions.', 'error');
+              }
             },
-            { enableHighAccuracy: true, timeout: 6000 }
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
           );
+        } else if (DriverHomePage.lastKnownLat && DriverHomePage.lastKnownLng) {
+          window.openGoogleMaps(DriverHomePage.lastKnownLat, DriverHomePage.lastKnownLng, 'My Van Location');
         } else {
           window.showToast('Device location is not supported by your browser.', 'error');
         }
       };
     }
 
-    // Show Gate Pass QR modal for Driver
+    // Show Gate Pass QR modal for Driver (Never displays raw driver id)
     const passBtn = document.getElementById('driver-show-gate-pass-btn');
     if (passBtn) {
       passBtn.onclick = () => {
@@ -289,9 +283,9 @@ class DriverHomePage {
         if (window.showDriverPassQRModal) {
           window.showDriverPassQRModal({
             id: vanId,
-            label: 'Van Transit Pass',
-            name: 'Campus Van Driver',
-            plate: 'Official Vehicle Pass'
+            label: DriverHomePage.currentVanLabel || 'Campus Van Pass',
+            name: DriverHomePage.driverName || 'Campus Van Driver',
+            plate: DriverHomePage.currentVanPlate || 'Authorized Vehicle'
           });
         }
       };

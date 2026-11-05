@@ -121,10 +121,10 @@ class ApiClient {
   }
 
   // Auth methods
-  async login(email, password, required_role) {
+  async login(username, password, required_role) {
     const res = await this.request('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password, required_role })
+      body: JSON.stringify({ username, email: username, password, required_role })
     });
     if (required_role) {
       localStorage.setItem(`campusride_${required_role}_token`, res.token);
@@ -150,9 +150,12 @@ class ApiClient {
   }
 
   logout() {
+    const key = this.getTokenKey();
+    localStorage.removeItem(key);
     this.setToken(null);
     this.user = null;
-    window.location.hash = '#/login';
+    window.location.hash = '#/';
+    window.location.reload();
   }
 }
 

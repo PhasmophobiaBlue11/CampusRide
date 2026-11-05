@@ -50,14 +50,19 @@ python server.py
 
 The system is hardwired with a permanent, undeletable Super Administrator account:
 
-| Role | Email | Password | Purpose |
+| Role | Username | Password | Purpose |
 | :--- | :--- | :--- | :--- |
-| **👑 Super Admin** | `adphasmo@gmail.com` | `Parth@123` | Permanent master account. Cannot be deleted or blocked. Has full authority to review staff requests, manage campus fleet, view audit logs, and assign gate operators. |
+| **👑 Super Admin** | `Admin2026` | `Parth@123` | Permanent master account. Cannot be deleted or blocked. Has full authority to review staff requests, manage campus fleet, view audit logs, and assign gate operators. |
+
+### 🔒 Device Isolation & 1-Account-Per-Device Policy
+- **Maximum 1 Account per role per device** (1 Driver, 1 Parent, 1 Staff).
+- Pure **Username + Password** authentication (Zero Google or Email OTP dependency).
+- If a new account is needed on the same device, the user can delete their old device account directly from the registration screen or Settings.
 
 Staff, Drivers, and Parents can register their own accounts directly on the respective registration pages:
 - **Staff Registration**: `/#/register-staff` (Awaits admin approval before gate access)
 - **Driver Registration**: `/#/register-driver` (Auto-allocates sequential vehicle label)
-- **Parent Registration**: `/#/register-parent` (Enables real-time bus tracking for student pickup)
+- **Parent Registration**: `/#/register-parent` (Captures live pickup GPS pin for student transit)
 
 ---
 

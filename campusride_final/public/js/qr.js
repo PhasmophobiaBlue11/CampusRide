@@ -58,22 +58,27 @@ window.showDriverPassQRModal = function({ id, label, name, plate, phone }) {
   const payload = `CAMPUSRIDE:DRIVER:${driverId}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=2&data=${encodeURIComponent(payload)}`;
 
+  const isRawId = (str) => typeof str === 'string' && (str.startsWith('drv_') || str.startsWith('usr_') || str.startsWith('id_') || str.length > 25);
+  const cleanLabel = (label && !isRawId(label)) ? label : 'Campus Pass';
+  const cleanName = (name && !isRawId(name)) ? name : 'Campus Driver';
+  const cleanPlate = (plate && !isRawId(plate)) ? plate : 'Official Vehicle Pass';
+
   const modal = document.createElement('div');
   modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4';
   modal.innerHTML = `
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-sm shadow-2xl p-6 space-y-4 text-center animate-fade-in-up">
       <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-        <span class="text-xs font-black px-2.5 py-1 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300">${label || 'Pass'}</span>
+        <span class="text-xs font-black px-2.5 py-1 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300">${cleanLabel}</span>
         <button id="close-qr-pass-modal" class="text-slate-400 hover:text-slate-600 text-xl font-bold cursor-pointer">✕</button>
       </div>
 
       <div class="py-1">
         <div class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Gate Entry & Exit Pass</div>
-        <h3 class="text-lg font-black text-slate-900 dark:text-white mt-0.5">${name || 'Driver / Staff'}</h3>
-        <div class="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">${plate || 'Vehicle Pass'}</div>
+        <h3 class="text-lg font-black text-slate-900 dark:text-white mt-0.5">${cleanName}</h3>
+        <div class="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">${cleanPlate}</div>
       </div>
 
-      <!-- Rendered QR Code -->
+      <!-- Rendered QR Code (No ID printed below) -->
       <div class="flex flex-col items-center justify-center p-4 bg-white rounded-2xl shadow-inner border border-slate-200 max-w-[240px] mx-auto">
         <img src="${qrUrl}" width="200" height="200" alt="QR Pass" class="rounded-xl shadow-sm mx-auto" />
         <div class="text-[11px] font-semibold text-emerald-600 mt-2 flex items-center justify-center gap-1">✓ Authorized Campus Gate Pass</div>

@@ -1,4 +1,5 @@
-// CampusRide — Password Recovery Page (§7.1, §17.3)
+// CampusRide — Password Recovery Page
+// Username + Registered Phone Number Verification (Zero Email / OTP needed)
 class ForgotPasswordPage {
   static render() {
     return `
@@ -15,23 +16,38 @@ class ForgotPasswordPage {
             <span class="text-3xl">🔑</span>
             <h1 class="text-xl font-bold text-slate-900 dark:text-white mt-2">Reset Password</h1>
             <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Enter your registered email address to receive password reset instructions.
+              Verify your username and registered phone number to set a new password instantly.
             </p>
           </div>
 
           <form id="forgot-form" class="space-y-4">
             <div>
-              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email Address</label>
-              <input type="email" id="forgot-email" required class="cr-input" placeholder="e.g. staff@campusride.edu" />
+              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Your Account Username</label>
+              <input type="text" id="forgot-username" required class="cr-input" placeholder="e.g. your username" autocomplete="username" />
             </div>
 
-            <button type="submit" id="forgot-submit-btn" class="cr-btn cr-btn-primary w-full py-2.5">
-              Send Reset Instructions
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Registered Mobile Phone Number</label>
+              <input type="tel" id="forgot-phone" required class="cr-input" placeholder="10-digit mobile number" pattern="[0-9]{10}" />
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Set New Password</label>
+              <div class="relative flex items-center">
+                <input type="password" id="forgot-password" required minlength="6" class="cr-input pr-11" placeholder="At least 6 characters" autocomplete="new-password" />
+                <button type="button" id="toggle-forgot-password" class="absolute right-2.5 p-1 text-base text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none">
+                  👁️
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" id="forgot-submit-btn" class="cr-btn cr-btn-primary w-full py-2.5 font-bold shadow-md cursor-pointer">
+              Set New Password & Sign In
             </button>
           </form>
 
           <div class="mt-4 text-center text-xs text-slate-500">
-            Remember your credentials? <a href="#/login" class="text-blue-600 font-semibold hover:underline">Return to Login</a>
+            Remember your password? <a href="#/" class="text-blue-600 font-semibold hover:underline">Return to Login</a>
           </div>
         </div>
       </div>
@@ -39,28 +55,43 @@ class ForgotPasswordPage {
   }
 
   static attachEvents() {
+    const toggleBtn = document.getElementById('toggle-forgot-password');
+    const passInput = document.getElementById('forgot-password');
+    if (toggleBtn && passInput) {
+      toggleBtn.onclick = () => {
+        const isPass = passInput.type === 'password';
+        passInput.type = isPass ? 'text' : 'password';
+        toggleBtn.textContent = isPass ? '🙈' : '👁️';
+      };
+    }
+
     const form = document.getElementById('forgot-form');
     if (form) {
       form.onsubmit = async (e) => {
         e.preventDefault();
-        const email = document.getElementById('forgot-email').value.trim();
+        const username = document.getElementById('forgot-username').value.trim();
+        const phone = document.getElementById('forgot-phone').value.trim();
+        const newPassword = document.getElementById('forgot-password').value;
         const btn = document.getElementById('forgot-submit-btn');
+
         btn.disabled = true;
-        btn.textContent = 'Processing...';
+        btn.textContent = 'Updating Password...';
 
         try {
           await window.api.request('/api/auth/forgot-password', {
             method: 'POST',
-            body: JSON.stringify({ email })
+            body: JSON.stringify({ username, phone, newPassword })
           });
-          window.showToast('Reset email dispatched. Please check your inbox.', 'success');
+
+          window.showToast('Password updated successfully! Please sign in with your new password.', 'success');
           setTimeout(() => {
-            window.location.hash = '#/login';
-          }, 1500);
+            window.location.hash = '#/';
+            window.location.reload();
+          }, 1200);
         } catch (err) {
           window.showToast(err.message, 'error');
           btn.disabled = false;
-          btn.textContent = 'Send Reset Instructions';
+          btn.textContent = 'Set New Password & Sign In';
         }
       };
     }

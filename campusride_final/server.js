@@ -1,74 +1,43 @@
 // CampusRide — High-Performance Node.js Server
-// Zero-dependency SQLite backend with Real-Time SSE, Authentication, QR Validation, and Safety Auditing
+// Zero-dependency SQLite backend with Real-Time SSE, Username Authentication, QR Validation, and Safety Auditing
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const tls = require('node:tls');
 const { DatabaseSync } = require('node:sqlite');
-
-let nodemailer = null;
-try {
-  nodemailer = require('nodemailer');
-} catch (e) {
-  // Optional dependency - direct TLS fallback is used
-}
 
 const PORT = process.env.PORT || 8000;
 const DB_PATH = path.join(__dirname, 'campusride.db');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
-// Load optional campusride_config.json or .env if present
-try {
-  const cfgPath = path.join(__dirname, 'campusride_config.json');
-  if (fs.existsSync(cfgPath)) {
-    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-    if (cfg.gmail_user && !process.env.GMAIL_USER) process.env.GMAIL_USER = cfg.gmail_user;
-    if (cfg.gmail_app_password && !process.env.GMAIL_APP_PASSWORD) process.env.GMAIL_APP_PASSWORD = cfg.gmail_app_password;
-    if (cfg.smtp_pass && !process.env.SMTP_PASS) process.env.SMTP_PASS = cfg.smtp_pass;
-    if (cfg.google_client_id && !process.env.GOOGLE_CLIENT_ID) process.env.GOOGLE_CLIENT_ID = cfg.google_client_id;
-    if (cfg.google_client_secret && !process.env.GOOGLE_CLIENT_SECRET) process.env.GOOGLE_CLIENT_SECRET = cfg.google_client_secret;
-  }
-} catch (e) {}
-
-try {
-  const envPath = path.join(__dirname, '.env');
-  if (fs.existsSync(envPath)) {
-    const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
-    for (const line of lines) {
-      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
-      if (match) {
-        const key = match[1];
-        let val = (match[2] || '').trim();
-        if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
-        if (val.startsWith("'") && val.endsWith("'")) val = val.slice(1, -1);
-        if (!process.env[key]) process.env[key] = val;
-      }
-    }
-  }
-} catch (e) {}
-
 // Initialize SQLite Database
 const db = new DatabaseSync(DB_PATH);
 
 // Helper: Run schema migrations
-// Permanent Master Administrator (§2)
-const PERMANENT_ADMIN_EMAIL = 'adphasmo@gmail.com';
+// Permanent Master Administrator
+const PERMANENT_ADMIN_USERNAME = 'Admin2026';
+const PERMANENT_ADMIN_PASSWORD = 'Parth@123';
 
 function ensurePermanentAdmin() {
   const now = new Date().toISOString();
-  const existing = db.prepare('SELECT id FROM users WHERE lower(email) = lower(?)').get(PERMANENT_ADMIN_EMAIL);
+
+  // Remove legacy email admin if present
+  try {
+    db.prepare('DELETE FROM users WHERE lower(email) = ? OR lower(username) = ?').run('adphasmo@gmail.com', 'adphasmo@gmail.com');
+  } catch (e) {}
+
+  const existing = db.prepare('SELECT id FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)').get(PERMANENT_ADMIN_USERNAME, PERMANENT_ADMIN_USERNAME);
   if (!existing) {
     db.prepare(`
-      INSERT INTO users (id, email, password_hash, role, display_name, phone, blocked, created_at)
-      VALUES (?, ?, ?, 'admin', 'Super Administrator (Parth)', '9876500000', 0, ?)
-    `).run('usr_perm_admin', PERMANENT_ADMIN_EMAIL, hashPassword('Parth@123'), now);
-    console.log(`[CampusRide] Permanent Master Admin created: ${PERMANENT_ADMIN_EMAIL}`);
+      INSERT INTO users (id, username, email, password_hash, role, display_name, phone, blocked, created_at)
+      VALUES (?, ?, ?, ?, 'admin', 'Master Administrator (Parth)', '9876500000', 0, ?)
+    `).run('usr_perm_admin', PERMANENT_ADMIN_USERNAME, PERMANENT_ADMIN_USERNAME, hashPassword(PERMANENT_ADMIN_PASSWORD), now);
+    console.log(`[CampusRide] Master Administrator created: username="${PERMANENT_ADMIN_USERNAME}", password="${PERMANENT_ADMIN_PASSWORD}"`);
   } else {
-    // Guarantee permanent admin privileges and update credentials
     db.prepare(`
-      UPDATE users SET role = 'admin', blocked = 0, password_hash = ? WHERE lower(email) = lower(?)
-    `).run(hashPassword('Parth@123'), PERMANENT_ADMIN_EMAIL);
+      UPDATE users SET username = ?, email = ?, role = 'admin', blocked = 0, password_hash = ? WHERE id = ?
+    `).run(PERMANENT_ADMIN_USERNAME, PERMANENT_ADMIN_USERNAME, hashPassword(PERMANENT_ADMIN_PASSWORD), existing.id);
+    console.log(`[CampusRide] Master Administrator active: username="${PERMANENT_ADMIN_USERNAME}"`);
   }
 }
 
@@ -78,7 +47,8 @@ function initDatabase() {
 
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
+      username TEXT UNIQUE,
+      email TEXT,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'user', -- 'admin' | 'user'
       display_name TEXT,
@@ -189,205 +159,14 @@ function initDatabase() {
       created_at TEXT NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS email_otps (
-      email TEXT PRIMARY KEY,
-      otp TEXT NOT NULL,
-      expires_at INTEGER NOT NULL,
-      created_at TEXT NOT NULL
-    );
   `);
 
+  // Ensure username column exists
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN username TEXT;`);
+  } catch (e) {}
+
   ensurePermanentAdmin();
-}
-
-// Email OTP Store & Verify helpers
-function storeOtp(email, otp) {
-  const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
-  const now = new Date().toISOString();
-  db.prepare(`
-    INSERT INTO email_otps (email, otp, expires_at, created_at)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(email) DO UPDATE SET otp = excluded.otp, expires_at = excluded.expires_at, created_at = excluded.created_at
-  `).run(email.toLowerCase().trim(), otp, expiresAt, now);
-}
-
-function verifyOtp(email, otp) {
-  if (!email || !otp) return false;
-  const row = db.prepare('SELECT otp, expires_at FROM email_otps WHERE email = ?').get(email.toLowerCase().trim());
-  if (!row) return false;
-  if (Date.now() > row.expires_at) return false;
-  return row.otp === otp.trim();
-}
-
-// Send OTP to real Gmail via Nodemailer or Direct TLS socket
-async function sendOtpEmail(toEmail, otp) {
-  const user = process.env.SMTP_USER || process.env.GMAIL_USER || 'adphasmo@gmail.com';
-  const pass = (process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
-  const subject = `CampusRide Email Verification Code: ${otp}`;
-  const textBody = `Hello,\n\nYour 6-digit CampusRide verification code is: ${otp}\n\nThis code is valid for 10 minutes.\n\nBest regards,\nCampusRide Team`;
-  const htmlBody = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-      <div style="text-align: center; margin-bottom: 20px;">
-        <h2 style="color: #2563eb; margin: 0; font-size: 24px;">🚌 CampusRide</h2>
-        <p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">Secure Campus Transportation Portal</p>
-      </div>
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 24px; text-align: center; margin-bottom: 20px;">
-        <p style="font-size: 14px; color: #475569; margin: 0 0 12px 0;">Your 6-digit verification code is:</p>
-        <div style="font-size: 36px; font-weight: 800; font-family: monospace; letter-spacing: 8px; color: #1d4ed8; padding: 8px 16px; background: #eff6ff; border-radius: 8px; display: inline-block;">
-          ${otp}
-        </div>
-        <p style="font-size: 12px; color: #94a3b8; margin: 14px 0 0 0;">⏱️ Valid for 10 minutes. Do not share this code.</p>
-      </div>
-      <p style="font-size: 12px; color: #64748b; line-height: 1.5; margin: 0 0 12px 0;">
-        Please enter this code on the registration screen to verify your email address.
-      </p>
-      <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;" />
-      <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">
-        © CampusRide Safe Transportation System
-      </p>
-    </div>
-  `;
-
-  if (!pass) {
-    console.log(`\n============================================================`);
-    console.log(`[CampusRide Live Email Service]`);
-    console.log(`Target Recipient : ${toEmail}`);
-    console.log(`6-Digit OTP Code : ${otp}`);
-    console.log(`Status           : Ready to deliver live email to Gmail inbox.`);
-    console.log(`To dispatch to real inboxes, add your 16-character Google App`);
-    console.log(`Password to campusride_config.json or Render Environment.`);
-    console.log(`============================================================\n`);
-    return { sent: false, reason: 'GMAIL_APP_PASSWORD_NOT_SET' };
-  }
-
-  // If nodemailer is installed, use it
-  if (nodemailer) {
-    try {
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user, pass }
-      });
-      await transporter.sendMail({
-        from: `"CampusRide Verification" <${user}>`,
-        to: toEmail,
-        subject,
-        text: textBody,
-        html: htmlBody
-      });
-      console.log(`[CampusRide OTP Email] Delivered verification email to ${toEmail} via Nodemailer`);
-      return { sent: true };
-    } catch (nmErr) {
-      console.warn(`[CampusRide OTP Email] Nodemailer error (${nmErr.message}), falling back to direct TLS socket...`);
-    }
-  }
-
-  // Direct TLS socket to smtp.gmail.com:465
-  return new Promise((resolve) => {
-    let resolved = false;
-    const finish = (result) => {
-      if (!resolved) {
-        resolved = true;
-        resolve(result);
-      }
-    };
-
-    const socket = tls.connect({
-      host: 'smtp.gmail.com',
-      port: 465,
-      rejectUnauthorized: true,
-      timeout: 12000
-    }, () => {});
-
-    let step = 0;
-    let buffer = '';
-    socket.setEncoding('utf8');
-
-    socket.on('data', (chunk) => {
-      buffer += chunk;
-      const lines = buffer.split('\r\n').filter(Boolean);
-      const lastLine = lines[lines.length - 1] || '';
-
-      if (!/^\d{3} /.test(lastLine) && !/^\d{3}$/.test(lastLine)) {
-        return;
-      }
-      buffer = '';
-
-      try {
-        if (step === 0 && lastLine.startsWith('220')) {
-          step = 1;
-          socket.write('EHLO campusride.app\r\n');
-        } else if (step === 1 && lastLine.startsWith('250')) {
-          step = 2;
-          socket.write('AUTH LOGIN\r\n');
-        } else if (step === 2 && lastLine.startsWith('334')) {
-          step = 3;
-          socket.write(Buffer.from(user).toString('base64') + '\r\n');
-        } else if (step === 3 && lastLine.startsWith('334')) {
-          step = 4;
-          socket.write(Buffer.from(pass).toString('base64') + '\r\n');
-        } else if (step === 4 && lastLine.startsWith('235')) {
-          step = 5;
-          socket.write(`MAIL FROM:<${user}>\r\n`);
-        } else if (step === 5 && lastLine.startsWith('250')) {
-          step = 6;
-          socket.write(`RCPT TO:<${toEmail}>\r\n`);
-        } else if (step === 6 && lastLine.startsWith('250')) {
-          step = 7;
-          socket.write('DATA\r\n');
-        } else if (step === 7 && lastLine.startsWith('354')) {
-          step = 8;
-          const boundary = '----=_Part_' + Date.now();
-          const rawMessage = [
-            `From: "CampusRide Verification" <${user}>`,
-            `To: <${toEmail}>`,
-            `Subject: ${subject}`,
-            `MIME-Version: 1.0`,
-            `Content-Type: multipart/alternative; boundary="${boundary}"`,
-            ``,
-            `--${boundary}`,
-            `Content-Type: text/plain; charset=UTF-8`,
-            `Content-Transfer-Encoding: 7bit`,
-            ``,
-            textBody,
-            ``,
-            `--${boundary}`,
-            `Content-Type: text/html; charset=UTF-8`,
-            `Content-Transfer-Encoding: 7bit`,
-            ``,
-            htmlBody,
-            ``,
-            `--${boundary}--`,
-            `.`
-          ].join('\r\n') + '\r\n';
-          socket.write(rawMessage);
-        } else if (step === 8 && lastLine.startsWith('250')) {
-          step = 9;
-          socket.write('QUIT\r\n');
-          console.log(`[CampusRide OTP Email] Delivered verification code to ${toEmail} via direct Gmail TLS`);
-          finish({ sent: true });
-          socket.end();
-        } else if (/^[45]\d\d/.test(lastLine)) {
-          console.error(`[CampusRide OTP Email] SMTP rejected with: ${lastLine}`);
-          finish({ sent: false, error: lastLine });
-          socket.destroy();
-        }
-      } catch (err) {
-        console.error(`[CampusRide OTP Email] Error in SMTP stream:`, err.message);
-        finish({ sent: false, error: err.message });
-        socket.destroy();
-      }
-    });
-
-    socket.on('timeout', () => {
-      finish({ sent: false, error: 'timeout' });
-      socket.destroy();
-    });
-
-    socket.on('error', (err) => {
-      console.error('[CampusRide OTP Email] Socket error:', err.message);
-      finish({ sent: false, error: err.message });
-    });
-  });
 }
 
 // Simple deterministic hash for demo authentication
@@ -460,7 +239,7 @@ function getUserIdFromReq(req) {
 
 function getUserProfile(userId) {
   if (!userId) return null;
-  const user = db.prepare('SELECT id, email, role, display_name, phone, blocked FROM users WHERE id = ?').get(userId);
+  const user = db.prepare('SELECT id, username, email, role, display_name, phone, blocked FROM users WHERE id = ?').get(userId);
   if (!user || user.blocked) return null;
 
   // Check staff status
@@ -468,7 +247,7 @@ function getUserProfile(userId) {
   if (user.role === 'admin') {
     staffStatus = 'approved';
   } else {
-    const req = db.prepare('SELECT status FROM staff_requests WHERE user_id = ? OR email = ?').get(user.id, user.email);
+    const req = db.prepare('SELECT status FROM staff_requests WHERE user_id = ? OR email = ? OR user_id = ?').get(user.id, user.username, user.email);
     if (req) staffStatus = req.status;
   }
 
@@ -479,6 +258,7 @@ function getUserProfile(userId) {
 
   return {
     ...user,
+    username: user.username || user.email || user.id,
     staffStatus,
     driverProfile: driverProfile || null,
     parentProfile: parentProfile || null
@@ -652,292 +432,75 @@ const server = http.createServer(async (req, res) => {
       // PUBLIC CONFIG
       if (pathname === '/api/config' && req.method === 'GET') {
         return sendJson(res, 200, {
-          googleClientId: process.env.GOOGLE_CLIENT_ID || '',
-          permanentAdminEmail: PERMANENT_ADMIN_EMAIL
+          permanentAdminUsername: PERMANENT_ADMIN_USERNAME
         });
       }
 
-      // AUTH: Send Email OTP
-      if (pathname === '/api/auth/send-otp' && req.method === 'POST') {
-        const { email } = await readJsonBody(req);
-        if (!email) return sendError(res, 400, 'Valid Gmail address is required');
-        const cleanEmail = email.trim().toLowerCase();
-
-        // Strict Gmail validation (blocks typos like @gm.com, @gmai.com)
-        const GMAIL_REGEX = /^(?!.*\.\.)[a-z0-9][a-z0-9._%+-]{2,34}@(gmail|googlemail)\.com$/i;
-        if (!GMAIL_REGEX.test(cleanEmail)) {
-          return sendError(res, 400, 'Invalid Gmail address. Please enter a valid address ending in @gmail.com (e.g. yourname@gmail.com). Typos like @gm.com are not accepted.');
-        }
-
-        // Generate 6-digit OTP
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        storeOtp(cleanEmail, otp);
-        console.log(`[CampusRide OTP] Generated 6-digit OTP for ${cleanEmail}: ${otp}`);
-
-        // Dispatch real email via Gmail SMTP (Nodemailer / Direct TLS)
-        let mailResult = { sent: false };
-        try {
-          mailResult = await sendOtpEmail(cleanEmail, otp);
-        } catch (mailErr) {
-          console.error('[CampusRide OTP Email Error]', mailErr.message);
-          mailResult = { sent: false, error: mailErr.message };
-        }
-
+      // AUTH: Check if a Username exists (for availability & device check)
+      if (pathname === '/api/auth/check-username' && req.method === 'GET') {
+        const username = (urlObj.searchParams.get('username') || '').trim();
+        if (!username) return sendJson(res, 200, { exists: false });
+        const found = db.prepare('SELECT id, username, email, role, display_name FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)').get(username, username);
         return sendJson(res, 200, {
-          success: true,
-          emailDelivered: mailResult && mailResult.sent ? true : false,
-          message: `A 6-digit verification code has been dispatched to ${cleanEmail}. Please check your Gmail inbox and spam folder.`
+          exists: Boolean(found),
+          username: found ? (found.username || found.email) : null,
+          role: found ? found.role : null,
+          displayName: found ? found.display_name : null
         });
       }
 
-      // AUTH: Google Real Redirect Flow (accounts.google.com/v3/signin/accountchooser)
-      if (pathname === '/api/auth/google' && req.method === 'GET') {
-        const role = urlObj.searchParams.get('role') || 'parent';
-        const clientId = (process.env.GOOGLE_CLIENT_ID || '').trim();
-        
-        const host = req.headers['x-forwarded-host'] || req.headers.host || 'campusride-1-nt84.onrender.com';
-        const proto = req.headers['x-forwarded-proto'] || (host.includes('localhost') ? 'http' : 'https');
-        const redirectUri = `${proto}://${host}/api/auth/google/callback`;
+      // AUTH: Delete Account from Device (Allows registering a new account on this device)
+      if (pathname === '/api/auth/delete-device-account' && req.method === 'POST') {
+        const { username, role } = await readJsonBody(req);
+        if (!username) return sendError(res, 400, 'Username is required');
+        const cleanUser = username.trim().toLowerCase();
 
-        const targetPage = role === 'driver' ? 'register-driver' : role === 'staff' ? 'register-staff' : 'register-parent';
-
-        if (!clientId) {
-          res.writeHead(302, { Location: `/#/${targetPage}?google_error=no_client_id` });
-          return res.end();
+        // Master Administrator cannot be deleted
+        if (cleanUser === PERMANENT_ADMIN_USERNAME.toLowerCase()) {
+          return sendError(res, 403, 'Master Administrator account cannot be deleted.');
         }
 
-        const stateObj = { role, host, proto, ts: Date.now() };
-        const state = Buffer.from(JSON.stringify(stateObj)).toString('base64');
+        const found = db.prepare('SELECT id, role FROM users WHERE lower(username) = ? OR lower(email) = ?').get(cleanUser, cleanUser);
+        if (!found) {
+          return sendJson(res, 200, { success: true, message: 'Account not found or already deleted.' });
+        }
 
-        // Real Google Account Chooser URL
-        const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-          `client_id=${encodeURIComponent(clientId)}&` +
-          `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-          `response_type=code&` +
-          `scope=openid%20email%20profile&` +
-          `prompt=select_account&` +
-          `state=${encodeURIComponent(state)}`;
-
-        res.writeHead(302, { Location: googleAuthUrl });
-        return res.end();
+        db.prepare('DELETE FROM children WHERE parent_id = ?').run(found.id);
+        db.prepare('DELETE FROM parents WHERE user_id = ?').run(found.id);
+        db.prepare('DELETE FROM driver_profiles WHERE user_id = ?').run(found.id);
+        db.prepare('DELETE FROM staff_requests WHERE user_id = ?').run(found.id);
+        db.prepare('DELETE FROM users WHERE id = ?').run(found.id);
+        console.log(`[CampusRide] Device deleted account: "${username}" (role: ${role || found.role})`);
+        return sendJson(res, 200, { success: true, message: `Account "${username}" successfully deleted.` });
       }
 
-      // AUTH: Google Real Redirect Callback
-      if (pathname === '/api/auth/google/callback' && req.method === 'GET') {
-        const code = urlObj.searchParams.get('code');
-        const stateRaw = urlObj.searchParams.get('state');
-        const errParam = urlObj.searchParams.get('error');
-
-        let role = 'parent';
-        try {
-          if (stateRaw) {
-            const parsed = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8'));
-            if (parsed.role) role = parsed.role;
-          }
-        } catch {}
-
-        const targetPage = role === 'driver' ? 'register-driver' : role === 'staff' ? 'register-staff' : 'register-parent';
-
-        if (errParam || !code) {
-          res.writeHead(302, { Location: `/#/${targetPage}?google_error=cancelled` });
-          return res.end();
-        }
-
-        const clientId = (process.env.GOOGLE_CLIENT_ID || '').trim();
-        const clientSecret = (process.env.GOOGLE_CLIENT_SECRET || '').trim();
-        const host = req.headers['x-forwarded-host'] || req.headers.host || 'campusride-1-nt84.onrender.com';
-        const proto = req.headers['x-forwarded-proto'] || (host.includes('localhost') ? 'http' : 'https');
-        const redirectUri = `${proto}://${host}/api/auth/google/callback`;
-
-        try {
-          const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              code,
-              client_id: clientId,
-              client_secret: clientSecret,
-              redirect_uri: redirectUri,
-              grant_type: 'authorization_code'
-            })
-          });
-
-          const tokenData = await tokenRes.json();
-          let googleEmail = '';
-          let googleName = '';
-
-          if (tokenData.id_token) {
-            const parts = tokenData.id_token.split('.');
-            if (parts.length >= 2) {
-              const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
-              googleEmail = (payload.email || '').toLowerCase().trim();
-              googleName = payload.name || '';
-            }
-          }
-
-          if (!googleEmail && tokenData.access_token) {
-            const uiRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-              headers: { Authorization: `Bearer ${tokenData.access_token}` }
-            });
-            const ui = await uiRes.json();
-            googleEmail = (ui.email || '').toLowerCase().trim();
-            googleName = ui.name || '';
-          }
-
-          if (!googleEmail) {
-            res.writeHead(302, { Location: `/#/${targetPage}?google_error=no_email` });
-            return res.end();
-          }
-
-          // 1. Check if chosen email is Master Administrator
-          if (googleEmail === PERMANENT_ADMIN_EMAIL.toLowerCase()) {
-            res.writeHead(302, { Location: `/#/${targetPage}?google_error=admin_exists&email=${encodeURIComponent(googleEmail)}` });
-            return res.end();
-          }
-
-          // 2. Check if chosen email already exists in users database
-          const existing = db.prepare('SELECT id, role FROM users WHERE lower(email) = lower(?)').get(googleEmail);
-          if (existing) {
-            res.writeHead(302, { Location: `/#/${targetPage}?google_error=already_exists&email=${encodeURIComponent(googleEmail)}` });
-            return res.end();
-          }
-
-          // 3. New available account: verified by Google!
-          res.writeHead(302, { Location: `/#/${targetPage}?google_verified=1&email=${encodeURIComponent(googleEmail)}&name=${encodeURIComponent(googleName)}` });
-          return res.end();
-
-        } catch (err) {
-          console.error('[Google OAuth Callback Error]', err);
-          res.writeHead(302, { Location: `/#/${targetPage}?google_error=failed` });
-          return res.end();
-        }
-      }
-
-      // AUTH: Verify Email OTP
-      if (pathname === '/api/auth/verify-otp' && req.method === 'POST') {
-        const { email, otp } = await readJsonBody(req);
-        if (!email || !otp) return sendError(res, 400, 'Email and 6-digit OTP are required');
-        const cleanEmail = email.trim().toLowerCase();
-        const valid = verifyOtp(cleanEmail, otp);
-        if (!valid) return sendError(res, 400, 'Invalid or expired verification code');
-        return sendJson(res, 200, { success: true, verified: true });
-      }
-
-      // AUTH: Google Account Verification / Existence Check (§Option 2: Continue with Google)
-      if (pathname === '/api/auth/google-check' && req.method === 'POST') {
-        const { email, role } = await readJsonBody(req);
-        if (!email) return sendError(res, 400, 'Valid Gmail address is required');
-        const cleanEmail = email.trim().toLowerCase();
-
-        // Check if this account is the Master Administrator
-        if (cleanEmail === PERMANENT_ADMIN_EMAIL.toLowerCase()) {
-          return sendJson(res, 200, {
-            exists: true,
-            isAdmin: true,
-            email: cleanEmail,
-            message: `This email (${cleanEmail}) is registered as Master Administrator. Please sign in via the Admin Console.`
-          });
-        }
-
-        const foundUser = db.prepare('SELECT * FROM users WHERE lower(email) = lower(?)').get(cleanEmail);
-        if (!foundUser) {
-          // Fresh, available email - ready for instant registration!
-          return sendJson(res, 200, {
-            exists: false,
-            isNew: true,
-            email: cleanEmail,
-            message: `Google account ${cleanEmail} verified successfully.`
-          });
-        }
-
-        // Account exists - determine role
-        const profile = getUserProfile(foundUser.id);
-        const userRole = profile.role === 'admin' ? 'admin' :
-                         profile.driverProfile ? 'driver' :
-                         profile.parentProfile ? 'parent' : 'staff';
-
-        return sendJson(res, 200, {
-          exists: true,
-          isNew: false,
-          email: cleanEmail,
-          role: userRole,
-          displayName: profile.display_name,
-          message: `An account with this email (${cleanEmail}) already exists as a ${userRole}.`
-        });
-      }
-
-      // AUTH: Google 1-Click Login
-      if (pathname === '/api/auth/google-login' && req.method === 'POST') {
-        const { email, required_role } = await readJsonBody(req);
-        if (!email) return sendError(res, 400, 'Email is required');
-        const cleanEmail = email.trim().toLowerCase();
-
-        // Reject admin login through non-admin Google button
-        if (cleanEmail === PERMANENT_ADMIN_EMAIL.toLowerCase()) {
-          if (required_role !== 'admin') {
-            return sendError(res, 403, `This email belongs to Master Administrator. Please sign in via the Admin Console with your admin credentials.`);
-          }
-        }
-
-        const foundUser = db.prepare('SELECT * FROM users WHERE lower(email) = lower(?)').get(cleanEmail);
-        if (!foundUser) {
-          return sendError(res, 404, `No account found with ${cleanEmail}. Please create an account first.`);
-        }
-        if (foundUser.blocked) {
-          return sendError(res, 403, 'Account is inactive or blocked.');
-        }
-
-        const profile = getUserProfile(foundUser.id);
-
-        // Strict Role Gate
-        if (required_role === 'parent') {
-          if (!profile.parentProfile) {
-            return sendError(res, 403, 'Access Denied: This account is NOT registered as a Parent. Please open your dedicated portal.');
-          }
-        } else if (required_role === 'driver') {
-          if (!profile.driverProfile) {
-            return sendError(res, 403, 'Access Denied: This account is NOT registered as a Driver. Please open your dedicated portal.');
-          }
-        } else if (required_role === 'staff') {
-          if (profile.role !== 'admin' && (profile.driverProfile || profile.parentProfile)) {
-            return sendError(res, 403, 'Access Denied: This account is NOT registered as Gate Staff. Please open your dedicated portal.');
-          }
-        } else if (required_role === 'admin') {
-          if (profile.role !== 'admin') {
-            return sendError(res, 403, 'Access Denied: Master Administrator credentials required.');
-          }
-        }
-
-        const token = createToken(foundUser.id);
-        return sendJson(res, 200, { token, user: profile });
-      }
-
-      // AUTH: Login with Strict Role Gate Enforcement
+      // AUTH: Login with Username & Password (Strict Role Gate Enforcement)
       if (pathname === '/api/auth/login' && req.method === 'POST') {
-        const { email, password, required_role } = await readJsonBody(req);
-        if (!email || !password) return sendError(res, 400, 'Email and password are required');
+        const { username, email, password, required_role } = await readJsonBody(req);
+        const queryUser = (username || email || '').trim();
+        if (!queryUser || !password) return sendError(res, 400, 'Username and password are required');
 
-        const foundUser = db.prepare('SELECT * FROM users WHERE lower(email) = lower(?)').get(email.trim());
-        if (!foundUser) return sendError(res, 401, 'No account with this email exists');
-        if (foundUser.blocked) return sendError(res, 403, 'Account removed. Access is blocked.');
+        const foundUser = db.prepare('SELECT * FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)').get(queryUser, queryUser);
+        if (!foundUser) return sendError(res, 401, 'No account found with this username');
+        if (foundUser.blocked) return sendError(res, 403, 'Account is inactive or blocked.');
 
         const hash = hashPassword(password);
-        if (foundUser.password_hash !== hash) return sendError(res, 401, 'Invalid email or password');
+        if (foundUser.password_hash !== hash) return sendError(res, 401, 'Incorrect password. Please try again.');
 
         const profile = getUserProfile(foundUser.id);
 
-        // Strict Role Gate: Even with correct email & password, reject if not matching the app portal
+        // Strict Role Gate: Even with correct username & password, reject if not matching the app portal
         if (required_role === 'parent') {
           if (!profile.parentProfile) {
-            return sendError(res, 403, 'Access Denied: This is the Parent App. Your account is NOT registered as a Parent. Please open your dedicated portal.');
+            return sendError(res, 403, 'Access Denied: This is the Parent App. Your account is NOT registered as a Parent.');
           }
         } else if (required_role === 'driver') {
           if (!profile.driverProfile) {
-            return sendError(res, 403, 'Access Denied: This is the Driver App. Your account is NOT registered as a Driver. Please open your dedicated portal.');
+            return sendError(res, 403, 'Access Denied: This is the Driver App. Your account is NOT registered as a Driver.');
           }
         } else if (required_role === 'staff') {
           if (profile.role !== 'admin' && (profile.driverProfile || profile.parentProfile)) {
-            return sendError(res, 403, 'Access Denied: This is the Gate Staff App. Your account is NOT registered as Staff. Please open your dedicated portal.');
+            return sendError(res, 403, 'Access Denied: This is the Gate Staff App. Your account is NOT registered as Staff.');
           }
         } else if (required_role === 'admin') {
           if (profile.role !== 'admin') {
@@ -951,57 +514,62 @@ const server = http.createServer(async (req, res) => {
 
       // AUTH: Check blocked
       if (pathname === '/api/auth/check-blocked' && req.method === 'GET') {
-        const email = urlObj.searchParams.get('email');
-        if (!email) return sendJson(res, 200, { blocked: false });
-        const found = db.prepare('SELECT blocked FROM users WHERE lower(email) = lower(?)').get(email.trim());
+        const query = (urlObj.searchParams.get('username') || urlObj.searchParams.get('email') || '').trim();
+        if (!query) return sendJson(res, 200, { blocked: false });
+        const found = db.prepare('SELECT blocked FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)').get(query, query);
         return sendJson(res, 200, { blocked: Boolean(found && found.blocked) });
       }
 
-      // AUTH: Register Staff (Awaiting Approval Flow)
+      // AUTH: Register Staff
       if (pathname === '/api/auth/register-staff' && req.method === 'POST') {
-        const { fullName, email, phone, password } = await readJsonBody(req);
-        if (!fullName || !email || !phone || !password) return sendError(res, 400, 'All fields are required');
+        const { fullName, username, email, phone, password } = await readJsonBody(req);
+        const rawUser = (username || email || '').trim();
+        if (!fullName || !rawUser || !phone || !password) return sendError(res, 400, 'All fields (Full Name, Username, Phone, Password) are required');
 
-        // Check if email already registered
-        const existing = db.prepare('SELECT id, blocked FROM users WHERE lower(email) = lower(?)').get(email.trim());
-        if (existing) return sendError(res, 400, 'An account with this email already exists');
+        if (rawUser.length < 3) return sendError(res, 400, 'Username must be at least 3 characters long');
+
+        // Check if username already taken
+        const existing = db.prepare('SELECT id FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)').get(rawUser, rawUser);
+        if (existing) return sendError(res, 400, `The username "${rawUser}" is already taken. Please choose another username.`);
 
         const newUserId = generateId('usr_staff');
         const now = new Date().toISOString();
         db.prepare(`
-          INSERT INTO users (id, email, password_hash, role, display_name, phone, blocked, created_at)
-          VALUES (?, ?, ?, 'user', ?, ?, 0, ?)
-        `).run(newUserId, email.trim(), hashPassword(password), fullName.trim(), phone.trim(), now);
+          INSERT INTO users (id, username, email, password_hash, role, display_name, phone, blocked, created_at)
+          VALUES (?, ?, ?, ?, 'user', ?, ?, 0, ?)
+        `).run(newUserId, rawUser, rawUser, hashPassword(password), fullName.trim(), phone.trim(), now);
 
         const reqId = generateId('req');
         db.prepare(`
           INSERT INTO staff_requests (id, user_id, full_name, email, phone, status, notes, is_admin, created_at)
           VALUES (?, ?, ?, ?, ?, 'pending', 'Submitted self-service staff registration', 0, ?)
-        `).run(reqId, newUserId, fullName.trim(), email.trim(), phone.trim(), now);
+        `).run(reqId, newUserId, fullName.trim(), rawUser, phone.trim(), now);
 
         const token = createToken(newUserId);
         const profile = getUserProfile(newUserId);
-        broadcastEvent('staff_request_created', { id: reqId, fullName, email });
-        return sendJson(res, 201, { token, user: profile, message: 'Staff request submitted. Awaiting admin approval.' });
+        broadcastEvent('staff_request_created', { id: reqId, fullName, username: rawUser });
+        return sendJson(res, 201, { token, user: profile, message: 'Staff registration submitted successfully.' });
       }
 
       // AUTH: Register Driver (Auto creates Van)
       if (pathname === '/api/auth/register-driver' && req.method === 'POST') {
-        const { fullName, email, phone, password, vehicleNo, vehicleType } = await readJsonBody(req);
-        if (!fullName || !email || !phone || !password || !vehicleNo) return sendError(res, 400, 'All fields are required');
+        const { fullName, username, email, phone, password, vehicleNo, vehicleType } = await readJsonBody(req);
+        const rawUser = (username || email || '').trim();
+        if (!fullName || !rawUser || !phone || !password || !vehicleNo) return sendError(res, 400, 'All fields (Full Name, Username, Phone, Password, Vehicle No) are required');
 
-        const existing = db.prepare('SELECT id FROM users WHERE lower(email) = lower(?)').get(email.trim());
-        if (existing) return sendError(res, 400, 'An account with this email already exists');
+        if (rawUser.length < 3) return sendError(res, 400, 'Username must be at least 3 characters long');
+
+        const existing = db.prepare('SELECT id FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)').get(rawUser, rawUser);
+        if (existing) return sendError(res, 400, `The username "${rawUser}" is already taken. Please choose another username.`);
 
         const newUserId = generateId('usr_drv');
         const now = new Date().toISOString();
 
         db.prepare(`
-          INSERT INTO users (id, email, password_hash, role, display_name, phone, blocked, created_at)
-          VALUES (?, ?, ?, 'user', ?, ?, 0, ?)
-        `).run(newUserId, email.trim(), hashPassword(password), fullName.trim(), phone.trim(), now);
+          INSERT INTO users (id, username, email, password_hash, role, display_name, phone, blocked, created_at)
+          VALUES (?, ?, ?, ?, 'user', ?, ?, 0, ?)
+        `).run(newUserId, rawUser, rawUser, hashPassword(password), fullName.trim(), phone.trim(), now);
 
-        // Auto assign sequential label e.g. "Van 3"
         const nextLabel = getNextLabel('van');
         const vanId = generateId('drv_van');
         db.prepare(`
@@ -1014,7 +582,6 @@ const server = http.createServer(async (req, res) => {
           VALUES (?, ?, ?, ?, ?, ?)
         `).run(generateId('dp'), newUserId, fullName.trim(), phone.trim(), vanId, nextLabel);
 
-        // Create initial location (0, 0 awaiting first real driver GPS broadcast)
         db.prepare(`
           INSERT INTO van_locations (van_id, van_label, lat, lng, live, updated_at)
           VALUES (?, ?, 0, 0, 0, ?)
@@ -1023,24 +590,27 @@ const server = http.createServer(async (req, res) => {
         const token = createToken(newUserId);
         const profile = getUserProfile(newUserId);
         broadcastEvent('driver_registered', { vanId, nextLabel });
-        return sendJson(res, 201, { token, user: profile });
+        return sendJson(res, 201, { token, user: profile, message: 'Driver registered successfully!' });
       }
 
       // AUTH: Register Parent
       if (pathname === '/api/auth/register-parent' && req.method === 'POST') {
-        const { fullName, email, phone, password, address, lat, lng } = await readJsonBody(req);
-        if (!fullName || !email || !phone || !password) return sendError(res, 400, 'All fields are required');
+        const { fullName, username, email, phone, password, address, lat, lng } = await readJsonBody(req);
+        const rawUser = (username || email || '').trim();
+        if (!fullName || !rawUser || !phone || !password) return sendError(res, 400, 'All fields (Full Name, Username, Phone, Password) are required');
 
-        const existing = db.prepare('SELECT id FROM users WHERE lower(email) = lower(?)').get(email.trim());
-        if (existing) return sendError(res, 400, 'An account with this email already exists');
+        if (rawUser.length < 3) return sendError(res, 400, 'Username must be at least 3 characters long');
+
+        const existing = db.prepare('SELECT id FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)').get(rawUser, rawUser);
+        if (existing) return sendError(res, 400, `The username "${rawUser}" is already taken. Please choose another username.`);
 
         const newUserId = generateId('usr_par');
         const now = new Date().toISOString();
 
         db.prepare(`
-          INSERT INTO users (id, email, password_hash, role, display_name, phone, blocked, created_at)
-          VALUES (?, ?, ?, 'user', ?, ?, 0, ?)
-        `).run(newUserId, email.trim(), hashPassword(password), fullName.trim(), phone.trim(), now);
+          INSERT INTO users (id, username, email, password_hash, role, display_name, phone, blocked, created_at)
+          VALUES (?, ?, ?, ?, 'user', ?, ?, 0, ?)
+        `).run(newUserId, rawUser, rawUser, hashPassword(password), fullName.trim(), phone.trim(), now);
 
         db.prepare(`
           INSERT INTO parents (id, user_id, name, phone, address, address_lat, address_lng, selected_van_id, selected_van_label)
@@ -1049,7 +619,32 @@ const server = http.createServer(async (req, res) => {
 
         const token = createToken(newUserId);
         const profile = getUserProfile(newUserId);
-        return sendJson(res, 201, { token, user: profile });
+        return sendJson(res, 201, { token, user: profile, message: 'Parent account created successfully!' });
+      }
+
+      // AUTH: Forgot Password (Reset via Username + Registered Phone Number)
+      if (pathname === '/api/auth/forgot-password' && req.method === 'POST') {
+        const { username, phone, newPassword } = await readJsonBody(req);
+        if (!username || !phone || !newPassword) {
+          return sendError(res, 400, 'Username, registered phone number, and new password are required');
+        }
+
+        const cleanUser = username.trim().toLowerCase();
+        const cleanPhone = phone.trim();
+
+        if (cleanUser === PERMANENT_ADMIN_USERNAME.toLowerCase()) {
+          return sendError(res, 403, 'Master Administrator password cannot be reset via this form.');
+        }
+
+        const foundUser = db.prepare('SELECT * FROM users WHERE (lower(username) = ? OR lower(email) = ?) AND phone = ?').get(cleanUser, cleanUser, cleanPhone);
+        if (!foundUser) {
+          return sendError(res, 404, 'No account found matching this username and phone number combination.');
+        }
+
+        const newHash = hashPassword(newPassword);
+        db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, foundUser.id);
+        console.log(`[CampusRide] Password reset for user: ${foundUser.username || foundUser.email}`);
+        return sendJson(res, 200, { success: true, message: 'Password reset successfully! Please sign in with your new password.' });
       }
 
       // AUTH: Current User Profile
@@ -1067,7 +662,7 @@ const server = http.createServer(async (req, res) => {
       // AUTH: Self-Delete Account (§7.13)
       if (pathname === '/api/auth/delete-account' && req.method === 'POST') {
         if (!user) return sendError(res, 401, 'Unauthorized');
-        if (user.email.toLowerCase() === PERMANENT_ADMIN_EMAIL.toLowerCase()) {
+        if ((user.username && user.username.toLowerCase() === PERMANENT_ADMIN_USERNAME.toLowerCase()) || (user.email && user.email.toLowerCase() === PERMANENT_ADMIN_USERNAME.toLowerCase())) {
           return sendError(res, 403, 'The Permanent Master Administrator account cannot be deleted.');
         }
         db.prepare('DELETE FROM children WHERE parent_id = ?').run(user.id);
@@ -1116,7 +711,7 @@ const server = http.createServer(async (req, res) => {
         const reqId = pathname.split('/')[3];
         const staffReq = db.prepare('SELECT * FROM staff_requests WHERE id = ?').get(reqId);
         if (!staffReq) return sendError(res, 404, 'Request not found');
-        if (staffReq.email && staffReq.email.toLowerCase() === PERMANENT_ADMIN_EMAIL.toLowerCase()) {
+        if ((staffReq.email && staffReq.email.toLowerCase() === PERMANENT_ADMIN_USERNAME.toLowerCase()) || (staffReq.username && staffReq.username.toLowerCase() === PERMANENT_ADMIN_USERNAME.toLowerCase())) {
           return sendError(res, 403, 'The Permanent Master Administrator account cannot be blocked.');
         }
 
@@ -1349,6 +944,14 @@ const server = http.createServer(async (req, res) => {
         params.push(limit, offset);
 
         const logs = db.prepare(query).all(...params);
+        const safeLogs = logs.map(l => ({
+          id: l.id,
+          driver_label: l.driver_label || 'Vehicle',
+          driver_name: l.driver_name || 'Driver',
+          event_type: l.event_type,
+          scanned_by: l.scanned_by,
+          timestamp: l.timestamp
+        }));
 
         // Daily stats
         let statsQuery = 'SELECT event_type, count(*) as count FROM van_logs WHERE 1=1';
@@ -1369,7 +972,7 @@ const server = http.createServer(async (req, res) => {
           if (stats[row.event_type] !== undefined) stats[row.event_type] = row.count;
         }
 
-        return sendJson(res, 200, { logs, stats });
+        return sendJson(res, 200, { logs: safeLogs, stats });
       }
 
       // VAN REGISTER: Clear logs for driver/day (§7.6)
