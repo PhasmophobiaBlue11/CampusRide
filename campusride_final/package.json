@@ -1,0 +1,12 @@
+{
+  "name": "campusride",
+  "version": "1.0.0",
+  "description": "CampusRide — Secure Campus Transportation Management System",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
