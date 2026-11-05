@@ -3,19 +3,46 @@ const API_BASE = window.location.origin;
 
 class ApiClient {
   constructor() {
-    this.token = localStorage.getItem('campusride_token') || null;
+    this.token = this.getToken();
     this.user = null;
     this.sse = null;
     this.listeners = new Map();
   }
 
+  getTokenKey() {
+    // 1. Role-locked HTML wrapper (driver.html, parent.html, staff.html, admin.html)
+    if (window.CAMPUSRIDE_LOCKED_ROLE) {
+      return `campusride_${window.CAMPUSRIDE_LOCKED_ROLE}_token`;
+    }
+    // 2. URL Path / Hash check
+    const p = (window.location.pathname + window.location.hash).toLowerCase();
+    if (p.includes('/driver')) return 'campusride_driver_token';
+    if (p.includes('/parent')) return 'campusride_parent_token';
+    if (p.includes('/staff')) return 'campusride_staff_token';
+    if (p.includes('/admin')) return 'campusride_admin_token';
+
+    // 3. Stored app role
+    const r = localStorage.getItem('campusride_app_role');
+    if (r && ['driver', 'parent', 'staff', 'admin'].includes(r)) {
+      return `campusride_${r}_token`;
+    }
+
+    return 'campusride_token';
+  }
+
+  getToken() {
+    const key = this.getTokenKey();
+    return localStorage.getItem(key) || null;
+  }
+
   setToken(token) {
+    const key = this.getTokenKey();
     this.token = token;
     if (token) {
-      localStorage.setItem('campusride_token', token);
+      localStorage.setItem(key, token);
       this.connectSSE();
     } else {
-      localStorage.removeItem('campusride_token');
+      localStorage.removeItem(key);
       if (this.sse) {
         this.sse.close();
         this.sse = null;
@@ -99,12 +126,17 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ email, password, required_role })
     });
+    if (required_role) {
+      localStorage.setItem(`campusride_${required_role}_token`, res.token);
+      localStorage.setItem('campusride_app_role', required_role);
+    }
     this.setToken(res.token);
     this.user = res.user;
     return res.user;
   }
 
   async fetchMe() {
+    this.token = this.getToken();
     if (!this.token) return null;
     try {
       const res = await this.request('/api/auth/me');

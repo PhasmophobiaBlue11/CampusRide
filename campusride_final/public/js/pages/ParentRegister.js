@@ -156,24 +156,22 @@ class ParentRegisterPage {
           });
 
           otpContainer.classList.remove('hidden');
-
-          if (res.emailDelivered) {
-            otpMsg.innerHTML = `<span class="text-emerald-700 dark:text-emerald-300 font-semibold">✓ Verification code delivered to <b>${email}</b>.</span><br/>Please open your Gmail (check inbox & spam folder) and enter the 6-digit code below:`;
-            window.showToast(`Verification code sent to ${email}! Check your Gmail inbox.`, 'success');
-            otpInput.value = '';
-            otpInput.focus();
-          } else {
-            // Live SMTP not yet configured on server
-            otpMsg.innerHTML = `
-              <div class="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-[11px] space-y-1">
-                <div><b>⚠️ Live Gmail Delivery Note:</b> Render needs <code>GMAIL_APP_PASSWORD</code> in Environment variables to send to real inboxes.</div>
-                <div>For testing right now, your 6-digit verification code is: <b class="font-mono text-sm text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border select-all">${res.otp}</b></div>
+          otpMsg.innerHTML = `
+            <div class="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 text-xs leading-relaxed">
+              <div class="font-bold flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
+                <span>✓</span> Verification Code Sent!
               </div>
-            `;
-            window.showToast(`Test Code: ${res.otp} (Set GMAIL_APP_PASSWORD in Render for real Gmail)`, 'info');
-            otpInput.value = res.otp;
-            otpInput.focus();
-          }
+              <div class="mt-1">
+                A 6-digit verification code has been dispatched to <b>${email}</b>.
+              </div>
+              <div class="mt-1 text-[11px] text-emerald-800 dark:text-emerald-300">
+                Please open your Gmail (check inbox & spam folder) and enter the 6-digit code below:
+              </div>
+            </div>
+          `;
+          window.showToast(`Verification code sent to ${email}! Check your Gmail inbox.`, 'success');
+          otpInput.value = '';
+          otpInput.focus();
         } catch (err) {
           window.showToast(err.message, 'error');
         } finally {

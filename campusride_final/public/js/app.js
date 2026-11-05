@@ -117,9 +117,9 @@
                      user.parentProfile ? 'parent' : 'staff';
 
     // STRICT APP ROLE MISMATCH GUARD:
-    // If user is currently in a dedicated app (e.g. Parent App) but logged into a Staff or Driver account:
+    // If user is currently in a dedicated app (e.g. Driver App) but logged into a different role (e.g. Admin, Parent, Staff):
     // Disconnect that cross-role session and show the dedicated login for this app!
-    if (activeApp && activeApp !== userRole && user.role !== 'admin') {
+    if (activeApp && activeApp !== userRole) {
       window.api.setToken(null);
       localStorage.setItem('campusride_app_role', activeApp);
       appEl.innerHTML = window.LoginPage.render(activeApp);
@@ -187,15 +187,15 @@
     let attachCallback = null;
 
     if (path === '/' || path === '') {
-      if (user.role === 'admin') {
-        pageHtml = await window.AdminDashboardPage.render(user);
-        attachCallback = () => window.AdminDashboardPage.attachEvents(user);
-      } else if (user.driverProfile) {
+      if (activeApp === 'driver' || user.driverProfile) {
         pageHtml = await window.DriverHomePage.render(user);
         attachCallback = () => window.DriverHomePage.attachEvents(user);
-      } else if (user.parentProfile) {
+      } else if (activeApp === 'parent' || user.parentProfile) {
         pageHtml = await window.ParentHomePage.render(user);
         attachCallback = () => window.ParentHomePage.attachEvents(user);
+      } else if (user.role === 'admin' && (activeApp === 'admin' || !activeApp)) {
+        pageHtml = await window.AdminDashboardPage.render(user);
+        attachCallback = () => window.AdminDashboardPage.attachEvents(user);
       } else {
         pageHtml = await window.StaffHomePage.render(user);
         attachCallback = () => window.StaffHomePage.attachEvents(user);

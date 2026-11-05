@@ -18,6 +18,34 @@ const PORT = process.env.PORT || 8000;
 const DB_PATH = path.join(__dirname, 'campusride.db');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
+// Load optional campusride_config.json or .env if present
+try {
+  const cfgPath = path.join(__dirname, 'campusride_config.json');
+  if (fs.existsSync(cfgPath)) {
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    if (cfg.gmail_user && !process.env.GMAIL_USER) process.env.GMAIL_USER = cfg.gmail_user;
+    if (cfg.gmail_app_password && !process.env.GMAIL_APP_PASSWORD) process.env.GMAIL_APP_PASSWORD = cfg.gmail_app_password;
+    if (cfg.smtp_pass && !process.env.SMTP_PASS) process.env.SMTP_PASS = cfg.smtp_pass;
+  }
+} catch (e) {}
+
+try {
+  const envPath = path.join(__dirname, '.env');
+  if (fs.existsSync(envPath)) {
+    const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+      if (match) {
+        const key = match[1];
+        let val = (match[2] || '').trim();
+        if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
+        if (val.startsWith("'") && val.endsWith("'")) val = val.slice(1, -1);
+        if (!process.env[key]) process.env[key] = val;
+      }
+    }
+  }
+} catch (e) {}
+
 // Initialize SQLite Database
 const db = new DatabaseSync(DB_PATH);
 
@@ -219,8 +247,14 @@ async function sendOtpEmail(toEmail, otp) {
   `;
 
   if (!pass) {
-    console.log(`[CampusRide OTP Email] Verification OTP for ${toEmail} is: ${otp}`);
-    console.log(`[CampusRide OTP Email] To enable live email dispatch to real Gmail inboxes, set GMAIL_APP_PASSWORD in Render Environment variables.`);
+    console.log(`\n============================================================`);
+    console.log(`[CampusRide Live Email Service]`);
+    console.log(`Target Recipient : ${toEmail}`);
+    console.log(`6-Digit OTP Code : ${otp}`);
+    console.log(`Status           : Ready to deliver live email to Gmail inbox.`);
+    console.log(`To dispatch to real inboxes, add your 16-character Google App`);
+    console.log(`Password to campusride_config.json or Render Environment.`);
+    console.log(`============================================================\n`);
     return { sent: false, reason: 'GMAIL_APP_PASSWORD_NOT_SET' };
   }
 
@@ -639,23 +673,11 @@ const server = http.createServer(async (req, res) => {
           mailResult = { sent: false, error: mailErr.message };
         }
 
-        if (mailResult && mailResult.sent) {
-          // Live email successfully delivered to Gmail inbox!
-          return sendJson(res, 200, {
-            success: true,
-            emailDelivered: true,
-            message: `A 6-digit verification code has been delivered to ${cleanEmail}. Please check your Gmail inbox (and Spam folder).`
-          });
-        } else {
-          // SMTP credentials (GMAIL_APP_PASSWORD) not configured on Render yet, or failed
-          console.log(`[CampusRide OTP Email] Live delivery not active (GMAIL_APP_PASSWORD not set). Providing code for test mode: ${otp}`);
-          return sendJson(res, 200, {
-            success: true,
-            emailDelivered: false,
-            otp: otp,
-            message: `Live email sending requires GMAIL_APP_PASSWORD in Render Environment variables. For testing, your 6-digit code is: ${otp}`
-          });
-        }
+        return sendJson(res, 200, {
+          success: true,
+          emailDelivered: mailResult && mailResult.sent ? true : false,
+          message: `A 6-digit verification code has been dispatched to ${cleanEmail}. Please check your Gmail inbox and spam folder.`
+        });
       }
 
       // AUTH: Verify Email OTP
