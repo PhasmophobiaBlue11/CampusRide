@@ -52,6 +52,64 @@ class QRUtils {
 
 window.QRUtils = QRUtils;
 
+// Global QR Modal Helper for Driver / Staff Pass
+window.showDriverPassQRModal = function({ id, label, name, plate, phone }) {
+  const driverId = id || label;
+  const payload = `CAMPUSRIDE:DRIVER:${driverId}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=2&data=${encodeURIComponent(payload)}`;
+
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4';
+  modal.innerHTML = `
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-sm shadow-2xl p-6 space-y-4 text-center animate-fade-in-up">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+        <span class="text-xs font-black px-2.5 py-1 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300">${label || 'Pass'}</span>
+        <button id="close-qr-pass-modal" class="text-slate-400 hover:text-slate-600 text-xl font-bold cursor-pointer">✕</button>
+      </div>
+
+      <div class="py-1">
+        <div class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Gate Entry & Exit Pass</div>
+        <h3 class="text-lg font-black text-slate-900 dark:text-white mt-0.5">${name || 'Driver / Staff'}</h3>
+        <div class="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">${plate || 'Vehicle Pass'}</div>
+      </div>
+
+      <!-- Rendered QR Code -->
+      <div class="flex flex-col items-center justify-center p-4 bg-white rounded-2xl shadow-inner border border-slate-200 max-w-[240px] mx-auto">
+        <img src="${qrUrl}" width="200" height="200" alt="QR Pass" class="rounded-xl shadow-sm mx-auto" />
+        <div class="font-mono text-[10px] text-slate-500 mt-2 font-bold select-all tracking-wider">${payload}</div>
+      </div>
+
+      <p class="text-xs text-slate-500 dark:text-slate-400">
+        Gate security scans this QR pass to record authorized campus entry and exit.
+      </p>
+
+      <button id="print-qr-pass-btn" class="cr-btn cr-btn-primary w-full py-2.5 text-xs font-bold cursor-pointer">
+        🖨️ Print Pass Card
+      </button>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  modal.querySelector('#close-qr-pass-modal').onclick = () => modal.remove();
+  modal.querySelector('#print-qr-pass-btn').onclick = () => window.print();
+};
+
+window.qrPayload = {
+  buildPassQR: (label, name, plate, phone, id) => {
+    return `CAMPUSRIDE:DRIVER:${id || label}`;
+  },
+  renderCanvas: (container, text, size = 180) => {
+    if (!container) return;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=1&data=${encodeURIComponent(text)}`;
+    container.innerHTML = `
+      <div class="flex flex-col items-center justify-center p-2 bg-white rounded-xl">
+        <img src="${qrUrl}" width="${size}" height="${size}" alt="QR Pass" class="rounded-lg shadow-sm mx-auto" />
+        <div class="font-mono text-[10px] text-slate-500 mt-2 font-bold tracking-wider select-all">${text}</div>
+      </div>
+    `;
+  }
+};
+
 // Fullscreen Camera Scanner Modal Component
 class CameraScannerModal {
   constructor(options = {}) {

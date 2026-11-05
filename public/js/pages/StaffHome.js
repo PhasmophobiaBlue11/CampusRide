@@ -57,96 +57,51 @@ class StaffHomePage {
           </div>
         </div>
 
-        <!-- TWO DEDICATED OPTIONS: Parents and Drivers Directories -->
+        <!-- COMBINED SINGLE OPTION: Parents & Drivers Accounts Directory -->
         <div class="space-y-3">
           <div class="flex items-center justify-between">
-            <h2 class="text-base font-black text-slate-900 dark:text-white">Registered Accounts (Gate View)</h2>
-            <span class="text-xs text-slate-400">Two dedicated staff directories</span>
+            <h2 class="text-base font-black text-slate-900 dark:text-white">Registered Accounts Directory</h2>
+            <span class="text-xs text-slate-400">Gate registry view</span>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <!-- Option 1: Drivers Directory -->
-            <a href="#/drivers" class="cr-card p-5 no-underline text-inherit border-2 border-transparent hover:border-amber-500 transition group flex items-center justify-between shadow-sm hover:shadow-md">
-              <div class="flex items-center gap-4">
-                <div class="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center text-3xl group-hover:scale-110 transition shadow-sm shrink-0">
-                  🚌
-                </div>
-                <div>
-                  <div class="flex items-center gap-2">
-                    <h3 class="font-bold text-base text-slate-900 dark:text-white">Option 1: Drivers</h3>
-                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">
-                      ${driverCount} Registered
-                    </span>
-                  </div>
-                  <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Van drivers, staff vehicles, phone numbers, license & QR passes.
-                  </p>
-                </div>
+          <a href="#/directories" class="cr-card p-5 no-underline text-inherit border-2 border-transparent hover:border-indigo-500 transition group flex items-center justify-between shadow-sm hover:shadow-md">
+            <div class="flex items-center gap-4">
+              <div class="w-14 h-14 rounded-2xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-3xl group-hover:scale-110 transition shadow-sm shrink-0">
+                👥
               </div>
-              <div class="text-amber-600 dark:text-amber-400 font-black text-xl group-hover:translate-x-1 transition ml-2">
-                →
-              </div>
-            </a>
-
-            <!-- Option 2: Parents Directory -->
-            <a href="#/parents" class="cr-card p-5 no-underline text-inherit border-2 border-transparent hover:border-indigo-500 transition group flex items-center justify-between shadow-sm hover:shadow-md">
-              <div class="flex items-center gap-4">
-                <div class="w-14 h-14 rounded-2xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-3xl group-hover:scale-110 transition shadow-sm shrink-0">
-                  👨‍👩‍👧
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="font-bold text-base text-slate-900 dark:text-white">Parent / Driver Accounts Directory</h3>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300">
+                    ${driverCount + parentCount} Total
+                  </span>
                 </div>
-                <div>
-                  <div class="flex items-center gap-2">
-                    <h3 class="font-bold text-base text-slate-900 dark:text-white">Option 2: Parents</h3>
-                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300">
-                      ${parentCount} Registered
-                    </span>
-                  </div>
-                  <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Parent accounts, children, phone numbers, address & Google Maps.
-                  </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Tap to view all registered Parent accounts and Driver vehicle passes. Toggle between them inside.
+                </p>
+                <div class="flex items-center gap-3 mt-2 text-xs font-semibold">
+                  <span class="text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <span>🚌</span> ${driverCount} Drivers
+                  </span>
+                  <span class="text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                    <span>👨‍👩‍👧</span> ${parentCount} Parents
+                  </span>
                 </div>
               </div>
-              <div class="text-indigo-600 dark:text-indigo-400 font-black text-xl group-hover:translate-x-1 transition ml-2">
-                →
-              </div>
-            </a>
-          </div>
+            </div>
+            <div class="text-indigo-600 dark:text-indigo-400 font-black text-2xl group-hover:translate-x-1.5 transition ml-2">
+              →
+            </div>
+          </a>
         </div>
 
-        <!-- Quick Access Feature Grid -->
+        <!-- Quick Access Feature Grid (4 Single Cards, No Duplicates) -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <a href="#/entry-exit-scanner" class="cr-card p-5 no-underline text-inherit group hover:border-blue-500 transition">
             <div class="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition">
               📷
             </div>
             <h3 class="font-bold text-base text-slate-900 dark:text-white mb-1">Pass Scanner</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400">Scan CAMPUSRIDE driver pass QRs with alternation check.</p>
-          </a>
-
-          <a href="#/registration-scanner" class="cr-card p-5 no-underline text-inherit group hover:border-emerald-500 transition">
-            <div class="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition">
-              📝
-            </div>
-            <h3 class="font-bold text-base text-slate-900 dark:text-white mb-1">Register Driver / Staff</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400">Fill details or scan QR code to issue immediate passes.</p>
-          </a>
-
-          <a href="#/live-map" class="cr-card p-5 no-underline text-inherit group hover:border-indigo-500 transition">
-            <div class="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition">
-              🗺️
-            </div>
-            <h3 class="font-bold text-base text-slate-900 dark:text-white mb-1">Fleet on Google Maps</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400">View real-time fleet GPS coordinates and track on Google Maps.</p>
-          </a>
-
-          <a href="#/van-register" class="cr-card p-5 no-underline text-inherit group hover:border-amber-500 transition">
-            <div class="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition">
-              📋
-            </div>
-            <h3 class="font-bold text-base text-slate-900 dark:text-white mb-1">Daily Log Register</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400">Filter daily entry/exit audit logs by van and date.</p>
-          </a>
-        </div>
             <p class="text-xs text-slate-500 dark:text-slate-400">Scan CAMPUSRIDE driver pass QRs with alternation check.</p>
           </a>
 

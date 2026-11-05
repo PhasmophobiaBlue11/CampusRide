@@ -92,9 +92,10 @@ class DirectoriesPage {
                       📞 Call Driver
                     </a>
                   ` : ''}
-                  <a href="#/drivers" class="cr-btn cr-btn-secondary flex-1 py-1.5 text-xs text-center">
+                  <button type="button" class="dir-view-driver-pass-btn cr-btn cr-btn-secondary flex-1 py-1.5 text-xs text-center cursor-pointer select-none"
+                          data-id="${d.id}" data-label="${d.label}" data-name="${d.driver_name}" data-plate="${d.van_no}" data-phone="${d.phone || ''}">
                     🎟️ View Pass
-                  </a>
+                  </button>
                 </div>
               </div>
             `).join('')}
@@ -177,6 +178,19 @@ class DirectoriesPage {
         gridDrivers.classList.add('hidden');
       };
     }
+
+    document.querySelectorAll('.dir-view-driver-pass-btn').forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.getAttribute('data-id');
+        const label = btn.getAttribute('data-label');
+        const name = btn.getAttribute('data-name');
+        const plate = btn.getAttribute('data-plate');
+        const phone = btn.getAttribute('data-phone');
+        if (window.showDriverPassQRModal) {
+          window.showDriverPassQRModal({ id, label, name, plate, phone });
+        }
+      };
+    });
 
     document.querySelectorAll('.dir-parent-maps-btn').forEach(btn => {
       btn.onclick = () => {

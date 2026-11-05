@@ -314,13 +314,9 @@
             <span class="text-lg">📷</span>
             <span>Scan Pass</span>
           </a>
-          <a href="#/drivers" class="flex flex-col items-center gap-1 ${path === '/drivers' ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-white'}">
-            <span class="text-lg">🚌</span>
-            <span>Drivers</span>
-          </a>
-          <a href="#/parents" class="flex flex-col items-center gap-1 ${path === '/directories' || path === '/parents' ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-white'}">
-            <span class="text-lg">👨‍👩‍👧</span>
-            <span>Parents</span>
+          <a href="#/directories" class="flex flex-col items-center gap-1 ${path === '/directories' || path === '/parents' || path === '/drivers' ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-lg">👥</span>
+            <span>Accounts</span>
           </a>
           <a href="#/settings" class="flex flex-col items-center gap-1 ${path === '/settings' ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-white'}">
             <span class="text-lg">⚙️</span>

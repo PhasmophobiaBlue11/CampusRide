@@ -359,8 +359,11 @@ class DriversRegistryPage {
 
   // QR Pass Dialog with QR Code and Print (§7.6)
   static openQRModal({ id, label, name, plate, phone }) {
-    const isVan = label.toLowerCase().startsWith('van');
-    const payload = window.qrPayload.buildPassQR(label, name, plate, phone);
+    if (window.showDriverPassQRModal) {
+      window.showDriverPassQRModal({ id, label, name, plate, phone });
+      return;
+    }
+    const payload = `CAMPUSRIDE:DRIVER:${id || label}`;
 
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4';

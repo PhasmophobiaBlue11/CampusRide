@@ -72,10 +72,14 @@ class DriverHomePage {
             <div id="driver-gps-coordinates" class="text-xs font-mono text-emerald-300 mt-1.5 ${isActive ? '' : 'hidden'}">
               📍 Live GPS: ${DriverHomePage.lastKnownLat ? `${DriverHomePage.lastKnownLat.toFixed(5)}, ${DriverHomePage.lastKnownLng.toFixed(5)}` : 'Detecting Satellite Fix...'}
             </div>
-            <div class="mt-2.5 flex items-center gap-2">
+            <div class="mt-2.5 flex flex-wrap items-center gap-2">
+              <button type="button" id="driver-show-gate-pass-btn" class="cr-btn bg-amber-500 hover:bg-amber-400 text-white text-xs font-bold py-2 px-3.5 rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer select-none">
+                <span>🎟️</span>
+                <span>Show Gate Pass QR</span>
+              </button>
               <button type="button" id="driver-view-self-map-btn" class="cr-btn bg-white/20 hover:bg-white/30 text-white text-xs font-bold py-2 px-3 rounded-xl border border-white/30 flex items-center gap-1.5 cursor-pointer select-none">
                 <span>📍</span>
-                <span>View My Location in Google Maps</span>
+                <span>View My Location in Maps</span>
               </button>
             </div>
           </div>
@@ -240,6 +244,22 @@ class DriverHomePage {
           );
         } else {
           window.showToast('Device location is not supported by your browser.', 'error');
+        }
+      };
+    }
+
+    // Show Gate Pass QR modal for Driver
+    const passBtn = document.getElementById('driver-show-gate-pass-btn');
+    if (passBtn) {
+      passBtn.onclick = () => {
+        const vanId = DriverHomePage.currentVanId;
+        if (window.showDriverPassQRModal) {
+          window.showDriverPassQRModal({
+            id: vanId,
+            label: 'Van Transit Pass',
+            name: 'Campus Van Driver',
+            plate: 'Official Vehicle Pass'
+          });
         }
       };
     }
