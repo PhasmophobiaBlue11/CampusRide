@@ -17,39 +17,62 @@
 
   const appEl = document.getElementById('app');
 
+  function detectAppRole() {
+    const host = window.location.hostname.toLowerCase();
+    const pathname = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+
+    // 1. Subdomain / Hostname: supports driver.*, campusride-driver.*, *.driver
+    if (host.startsWith('driver.') || host.includes('-driver') || host.endsWith('.driver')) return 'driver';
+    if (host.startsWith('parent.') || host.includes('-parent') || host.endsWith('.parent')) return 'parent';
+    if (host.startsWith('staff.') || host.includes('-staff') || host.endsWith('.staff')) return 'staff';
+    if (host.startsWith('admin.') || host.includes('-admin') || host.endsWith('.admin')) return 'admin';
+
+    // 2. Pathname: /driver, /parent, /staff, /admin
+    if (pathname === '/driver' || pathname.startsWith('/driver/')) return 'driver';
+    if (pathname === '/parent' || pathname.startsWith('/parent/')) return 'parent';
+    if (pathname === '/staff' || pathname.startsWith('/staff/')) return 'staff';
+    if (pathname === '/admin' || pathname.startsWith('/admin/')) return 'admin';
+
+    // 3. Hash: #/driver, #/parent, #/staff, #/admin
+    if (hash === '#/driver' || hash.startsWith('#/driver')) return 'driver';
+    if (hash === '#/parent' || hash.startsWith('#/parent')) return 'parent';
+    if (hash === '#/staff' || hash.startsWith('#/staff')) return 'staff';
+    if (hash === '#/admin' || hash.startsWith('#/admin')) return 'admin';
+
+    // 4. Stored role in localStorage from previous session
+    const saved = localStorage.getItem('campusride_app_role');
+    if (saved && ['driver', 'parent', 'staff', 'admin'].includes(saved)) {
+      return saved;
+    }
+
+    return null;
+  }
+
   async function route() {
     const hash = window.location.hash.slice(1) || '/';
     const path = hash.split('?')[0];
+    const activeApp = detectAppRole();
 
-    // Public Routes & Dedicated Portals
-    if (path === '/login' || path === '/driver-login' || path === '/driver' || path === '/parent-login' || path === '/parent' || path === '/staff-login' || path === '/staff' || path === '/admin-login') {
-      if (path === '/driver' || path === '/driver-login') {
-        window.LoginPage.activePortal = 'driver';
-      } else if (path === '/parent' || path === '/parent-login') {
-        window.LoginPage.activePortal = 'parent';
-      } else if (path === '/staff' || path === '/staff-login' || path === '/admin-login') {
-        window.LoginPage.activePortal = 'staff';
-      }
-      appEl.innerHTML = window.LoginPage.render();
-      window.LoginPage.attachEvents();
-      if (window.i18n) window.i18n.translateDOM();
-      return;
-    }
-    if (path === '/register-staff') {
-      appEl.innerHTML = window.StaffRegisterPage.render();
-      window.StaffRegisterPage.attachEvents();
-      if (window.i18n) window.i18n.translateDOM();
-      return;
-    }
+    // Dedicated Registration Routes
     if (path === '/register-driver') {
+      localStorage.setItem('campusride_app_role', 'driver');
       appEl.innerHTML = window.DriverRegisterPage.render();
       window.DriverRegisterPage.attachEvents();
       if (window.i18n) window.i18n.translateDOM();
       return;
     }
     if (path === '/register-parent') {
+      localStorage.setItem('campusride_app_role', 'parent');
       appEl.innerHTML = window.ParentRegisterPage.render();
       window.ParentRegisterPage.attachEvents();
+      if (window.i18n) window.i18n.translateDOM();
+      return;
+    }
+    if (path === '/register-staff') {
+      localStorage.setItem('campusride_app_role', 'staff');
+      appEl.innerHTML = window.StaffRegisterPage.render();
+      window.StaffRegisterPage.attachEvents();
       if (window.i18n) window.i18n.translateDOM();
       return;
     }
@@ -60,20 +83,47 @@
       return;
     }
 
-    // Protected Routes: Require User Auth
-    const user = await window.api.fetchMe();
-    if (!user) {
-      if (path.includes('driver')) window.location.hash = '#/driver-login';
-      else if (path.includes('parent')) window.location.hash = '#/parent-login';
-      else window.location.hash = '#/login';
+    // Launchpad Directory Route
+    if (path === '/launchpad') {
+      localStorage.removeItem('campusride_app_role');
+      appEl.innerHTML = window.AppLaunchpadPage.render();
+      window.AppLaunchpadPage.attachEvents();
+      if (window.i18n) window.i18n.translateDOM();
       return;
     }
 
-    // Strict Role-Based Routing & App Isolation Guards
-    const isDriver = Boolean(user.driverProfile && user.role !== 'admin');
-    const isParent = Boolean(user.parentProfile && user.role !== 'admin');
-    const isAdmin = user.role === 'admin';
+    // Check Authentication
+    const user = await window.api.fetchMe();
 
+    // If Unauthenticated: Render ONLY that app's dedicated login (NO tabs)
+    if (!user) {
+      if (activeApp) {
+        localStorage.setItem('campusride_app_role', activeApp);
+        appEl.innerHTML = window.LoginPage.render(activeApp);
+        window.LoginPage.attachEvents();
+        if (window.i18n) window.i18n.translateDOM();
+        return;
+      }
+
+      // Root without specific role displays the App Directory Launchpad
+      appEl.innerHTML = window.AppLaunchpadPage.render();
+      window.AppLaunchpadPage.attachEvents();
+      if (window.i18n) window.i18n.translateDOM();
+      return;
+    }
+
+    // Set active app role in storage to match the user's logged-in identity
+    const userRole = user.role === 'admin' ? 'admin' :
+                     user.driverProfile ? 'driver' :
+                     user.parentProfile ? 'parent' : 'staff';
+    localStorage.setItem('campusride_app_role', userRole);
+
+    const isDriver = userRole === 'driver';
+    const isParent = userRole === 'parent';
+    const isAdmin = userRole === 'admin';
+    const isStaff = userRole === 'staff';
+
+    // Strict Role-Based Routing & App Isolation Guards
     // 1. Driver App Isolation: Only console & settings allowed
     if (isDriver) {
       if (path !== '/' && path !== '' && path !== '/settings') {
@@ -91,7 +141,7 @@
     }
 
     // 3. Gate Staff Isolation: Cannot access master admin suite
-    if (!isAdmin && path === '/admin') {
+    if (isStaff && path === '/admin') {
       window.location.hash = '#/';
       return;
     }

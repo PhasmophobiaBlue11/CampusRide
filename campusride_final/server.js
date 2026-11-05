@@ -1170,10 +1170,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   // -------------------------------------------------------------
-  // Static File Serving
+  // Static File Serving & Direct Dedicated App Routes
+  // (/driver, /parent, /staff, /admin, /launchpad)
   // -------------------------------------------------------------
-  let filePath = path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname);
-  
+  if (pathname === '/driver' || pathname === '/parent' || pathname === '/staff' || pathname === '/admin' || pathname === '/launchpad' ||
+      pathname.startsWith('/driver/') || pathname.startsWith('/parent/') || pathname.startsWith('/staff/') || pathname.startsWith('/admin/')) {
+    filePath = path.join(PUBLIC_DIR, 'index.html');
+  }
+
   // Security check: stay within PUBLIC_DIR
   if (!filePath.startsWith(PUBLIC_DIR)) {
     res.writeHead(403);

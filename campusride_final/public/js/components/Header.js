@@ -154,7 +154,13 @@ class HeaderComponent {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
       logoutBtn.onclick = () => {
+        const currentRole = localStorage.getItem('campusride_app_role');
         window.api.logout();
+        if (currentRole) {
+          window.location.hash = `#/${currentRole}`;
+        } else {
+          window.location.hash = '#/launchpad';
+        }
         window.location.reload();
       };
     }
