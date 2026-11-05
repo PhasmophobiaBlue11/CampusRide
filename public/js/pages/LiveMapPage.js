@@ -22,13 +22,14 @@ class LiveMapPage {
       const loc = locations.find(l => l.van_id === v.id);
       return {
         ...v,
-        lat: loc ? loc.lat : 21.1458,
-        lng: loc ? loc.lng : 79.0882,
-        live: Boolean(loc && loc.live),
+        lat: loc ? Number(loc.lat) : 0,
+        lng: loc ? Number(loc.lng) : 0,
+        live: Boolean(loc && loc.live && Number(loc.lat) !== 0),
         updated_at: loc ? loc.updated_at : null
       };
     });
 
+    LiveMapPage.cachedFleet = fleet;
     const activeCount = fleet.filter(f => f.live).length;
 
     return `
@@ -54,12 +55,11 @@ class LiveMapPage {
           </div>
 
           <div>
-            <a href="https://www.google.com/maps/search/?api=1&query=${fleet[0]?.lat || 21.1458},${fleet[0]?.lng || 79.0882}" 
-               target="_blank" 
-               class="cr-btn bg-white text-blue-900 hover:bg-blue-50 font-bold px-6 py-3.5 shadow-lg flex items-center gap-2 text-sm whitespace-nowrap">
+            <button type="button" id="open-first-van-map-btn" 
+               class="cr-btn bg-white text-blue-900 hover:bg-blue-50 font-bold px-6 py-3.5 shadow-lg flex items-center gap-2 text-sm whitespace-nowrap cursor-pointer">
               <span>🗺️</span>
               <span>Open Fleet on Google Maps</span>
-            </a>
+            </button>
           </div>
         </div>
 
@@ -97,16 +97,16 @@ class LiveMapPage {
                   </div>
                   <div class="flex justify-between text-slate-500 font-mono">
                     <span>GPS Coordinates:</span>
-                    <span class="font-bold text-blue-600 dark:text-blue-400">${v.lat.toFixed(5)}, ${v.lng.toFixed(5)}</span>
+                    <span class="font-bold text-blue-600 dark:text-blue-400">${v.lat !== 0 ? `${v.lat.toFixed(5)}, ${v.lng.toFixed(5)}` : 'Awaiting GPS broadcast'}</span>
                   </div>
                 </div>
 
-                <a href="https://www.google.com/maps/search/?api=1&query=${v.lat},${v.lng}" 
-                   target="_blank" 
-                   class="cr-btn cr-btn-primary w-full py-2.5 text-xs font-bold flex items-center justify-center gap-2">
+                <button type="button" 
+                   data-lat="${v.lat}" data-lng="${v.lng}" data-label="${v.label}"
+                   class="view-van-map-btn cr-btn cr-btn-primary w-full py-2.5 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer">
                   <span>🗺️</span>
                   <span>View ${v.label} in Google Maps</span>
-                </a>
+                </button>
               </div>
             `).join('')}
           </div>
@@ -115,7 +115,32 @@ class LiveMapPage {
     `;
   }
 
-  static attachEvents() {}
+  static attachEvents() {
+    const firstBtn = document.getElementById('open-first-van-map-btn');
+    if (firstBtn) {
+      firstBtn.onclick = () => {
+        const liveVan = (LiveMapPage.cachedFleet || []).find(v => v.live && v.lat !== 0) || (LiveMapPage.cachedFleet || [])[0];
+        if (liveVan && liveVan.lat && liveVan.lat !== 0) {
+          window.openGoogleMaps(liveVan.lat, liveVan.lng, liveVan.label);
+        } else {
+          window.showToast('No active vehicles currently broadcasting GPS. The driver must click "Start Journey" first.', 'warning');
+        }
+      };
+    }
+
+    document.querySelectorAll('.view-van-map-btn').forEach(btn => {
+      btn.onclick = () => {
+        const lat = Number(btn.getAttribute('data-lat'));
+        const lng = Number(btn.getAttribute('data-lng'));
+        const label = btn.getAttribute('data-label') || 'Van';
+        if (lat && lng && lat !== 0) {
+          window.openGoogleMaps(lat, lng, label);
+        } else {
+          window.showToast(`${label} has not broadcasted its live location yet. Tracking becomes active when driver clicks "Start Journey".`, 'warning');
+        }
+      };
+    });
+  }
 }
 
 window.LiveMapPage = LiveMapPage;

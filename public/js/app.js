@@ -137,9 +137,9 @@
     const isStaff = userRole === 'staff';
 
     // Strict Role-Based Routing & App Isolation Guards
-    // 1. Driver App Isolation: Only console & settings allowed
+    // 1. Driver App Isolation: Only console, live map & settings allowed
     if (isDriver) {
-      if (path !== '/' && path !== '' && path !== '/settings') {
+      if (path !== '/' && path !== '' && path !== '/settings' && path !== '/live-map') {
         window.location.hash = '#/';
         return;
       }

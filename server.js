@@ -570,10 +570,10 @@ const server = http.createServer(async (req, res) => {
           VALUES (?, ?, ?, ?, ?, ?)
         `).run(generateId('dp'), newUserId, fullName.trim(), phone.trim(), vanId, nextLabel);
 
-        // Create initial location
+        // Create initial location (0, 0 awaiting first real driver GPS broadcast)
         db.prepare(`
           INSERT INTO van_locations (van_id, van_label, lat, lng, live, updated_at)
-          VALUES (?, ?, 21.1458, 79.0882, 0, ?)
+          VALUES (?, ?, 0, 0, 0, ?)
         `).run(vanId, nextLabel, now);
 
         const token = createToken(newUserId);
@@ -715,7 +715,7 @@ const server = http.createServer(async (req, res) => {
         if (kind === 'van') {
           db.prepare(`
             INSERT INTO van_locations (van_id, van_label, lat, lng, live, updated_at)
-            VALUES (?, ?, 21.1458, 79.0882, 0, ?)
+            VALUES (?, ?, 0, 0, 0, ?)
           `).run(id, label, now);
         }
 
@@ -874,7 +874,7 @@ const server = http.createServer(async (req, res) => {
         if (kind === 'van') {
           db.prepare(`
             INSERT INTO van_locations (van_id, van_label, lat, lng, live, updated_at)
-            VALUES (?, ?, 21.1458, 79.0882, 0, ?)
+            VALUES (?, ?, 0, 0, 0, ?)
           `).run(id, label, now);
         }
 
@@ -953,7 +953,7 @@ const server = http.createServer(async (req, res) => {
       // DRIVER JOURNEY: Start Journey (§7.8)
       if (pathname === '/api/journey/start' && req.method === 'POST') {
         if (!user) return sendError(res, 401, 'Unauthorized');
-        let { vanId } = await readJsonBody(req);
+        let { vanId, lat, lng } = await readJsonBody(req);
         
         // Auto-resolve van if not directly provided
         if (!vanId && user.driverProfile && user.driverProfile.selected_van_id) {
@@ -986,12 +986,23 @@ const server = http.createServer(async (req, res) => {
         // Clear pending entry alerts
         db.prepare('DELETE FROM ride_alerts WHERE van_id = ? AND alert_type = \'entry_no_journey\'').run(van.id);
 
-        // Mark location live (Upsert ensures row always exists)
-        db.prepare(`
-          INSERT INTO van_locations (van_id, van_label, lat, lng, live, updated_at)
-          VALUES (?, ?, 21.1458, 79.0882, 1, ?)
-          ON CONFLICT(van_id) DO UPDATE SET live = 1, updated_at = excluded.updated_at
-        `).run(van.id, van.label, now);
+        // Mark location live with real hardware coordinates (no dummy city coordinates)
+        const realLat = (lat !== undefined && lat !== null && !isNaN(Number(lat)) && Number(lat) !== 0) ? Number(lat) : null;
+        const realLng = (lng !== undefined && lng !== null && !isNaN(Number(lng)) && Number(lng) !== 0) ? Number(lng) : null;
+
+        if (realLat !== null && realLng !== null) {
+          db.prepare(`
+            INSERT INTO van_locations (van_id, van_label, lat, lng, live, updated_at)
+            VALUES (?, ?, ?, ?, 1, ?)
+            ON CONFLICT(van_id) DO UPDATE SET lat = excluded.lat, lng = excluded.lng, live = 1, updated_at = excluded.updated_at
+          `).run(van.id, van.label, realLat, realLng, now);
+        } else {
+          db.prepare(`
+            INSERT INTO van_locations (van_id, van_label, lat, lng, live, updated_at)
+            VALUES (?, ?, 0, 0, 1, ?)
+            ON CONFLICT(van_id) DO UPDATE SET live = 1, updated_at = excluded.updated_at
+          `).run(van.id, van.label, now);
+        }
 
         // Notify tracking parents
         const formattedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -1003,16 +1014,20 @@ const server = http.createServer(async (req, res) => {
           `).run(generateId('notif'), child.parent_id, van.id, van.label, now, `${van.label} has started its journey at ${formattedTime}! Live GPS tracking is now active.`, now);
         }
 
-        broadcastEvent('journey_started', { vanId: van.id, label: van.label });
-        return sendJson(res, 200, { success: true, vanId: van.id, label: van.label, live: true });
+        broadcastEvent('journey_started', { vanId: van.id, label: van.label, lat: realLat, lng: realLng });
+        return sendJson(res, 200, { success: true, vanId: van.id, label: van.label, live: true, lat: realLat, lng: realLng });
       }
 
       // DRIVER JOURNEY: Get Status
       if (pathname === '/api/journey/status' && req.method === 'GET') {
         const vanId = urlObj.searchParams.get('vanId');
         if (!vanId) return sendJson(res, 200, { live: false });
-        const loc = db.prepare('SELECT live FROM van_locations WHERE van_id = ?').get(vanId);
-        return sendJson(res, 200, { live: Boolean(loc && loc.live) });
+        const loc = db.prepare('SELECT live, lat, lng FROM van_locations WHERE van_id = ?').get(vanId);
+        return sendJson(res, 200, {
+          live: Boolean(loc && loc.live),
+          lat: loc ? loc.lat : null,
+          lng: loc ? loc.lng : null
+        });
       }
 
       // DRIVER JOURNEY: End Journey

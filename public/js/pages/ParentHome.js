@@ -24,7 +24,8 @@ class ParentHomePage {
     } catch {}
 
     const trackedVanLabel = children[0]?.van_label || 'Van';
-    const isLive = vanLocation && vanLocation.live;
+    const isLive = vanLocation && vanLocation.live && Number(vanLocation.lat) !== 0;
+    ParentHomePage.cachedVanLocation = vanLocation;
 
     return `
       <div class="max-w-4xl mx-auto px-4 py-6 space-y-6">
@@ -44,10 +45,10 @@ class ParentHomePage {
           </div>
 
           <div class="flex items-center gap-3">
-            <a href="https://www.google.com/maps/search/?api=1&query=${vanLocation?.lat || 21.1458},${vanLocation?.lng || 79.0882}" target="_blank" class="cr-btn bg-white text-blue-900 hover:bg-blue-50 font-bold px-6 py-3.5 shadow-lg flex items-center gap-2 text-sm">
+            <button type="button" id="parent-track-maps-btn" class="cr-btn bg-white text-blue-900 hover:bg-blue-50 font-bold px-6 py-3.5 shadow-lg flex items-center gap-2 text-sm cursor-pointer select-none">
               <span>🗺️</span>
-              <span>Open in Google Maps</span>
-            </a>
+              <span>${isLive ? 'Track Live Van in Maps' : 'View Van on Google Maps'}</span>
+            </button>
           </div>
         </div>
 
@@ -121,6 +122,19 @@ class ParentHomePage {
   }
 
   static attachEvents() {
+    // Track van in Google Maps
+    const trackMapsBtn = document.getElementById('parent-track-maps-btn');
+    if (trackMapsBtn) {
+      trackMapsBtn.onclick = () => {
+        const loc = ParentHomePage.cachedVanLocation;
+        if (loc && loc.lat && loc.lng && Number(loc.lat) !== 0) {
+          window.openGoogleMaps(loc.lat, loc.lng, loc.van_label || 'Campus Van');
+        } else {
+          window.showToast('Van has not broadcasted its live GPS position yet. Tracking becomes active when driver clicks "Start Journey".', 'warning');
+        }
+      };
+    }
+
     // Add child modal
     const addBtn = document.getElementById('add-child-modal-btn');
     if (addBtn) {
