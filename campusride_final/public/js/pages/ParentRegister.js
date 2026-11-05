@@ -47,7 +47,7 @@ class ParentRegisterPage {
                 </span>
               </div>
               <div class="flex gap-2">
-                <input type="email" id="parent-email" required class="cr-input flex-1" placeholder="e.g. parent@campusride.edu" />
+                <input type="email" id="parent-email" required class="cr-input flex-1" placeholder="e.g. yourname@gmail.com" />
                 <button type="button" id="parent-send-otp-btn" class="cr-btn cr-btn-secondary px-3 py-2 text-xs font-bold whitespace-nowrap">
                   Send OTP
                 </button>
@@ -140,25 +140,40 @@ class ParentRegisterPage {
 
     if (sendOtpBtn) {
       sendOtpBtn.onclick = async () => {
-        const email = emailInput.value.trim();
-        if (!email || !email.includes('@')) {
-          return window.showToast('Please enter a valid email address first', 'error');
+        const email = emailInput.value.trim().toLowerCase();
+        const GMAIL_REGEX = /^(?!.*\.\.)[a-z0-9][a-z0-9._%+-]{2,34}@(gmail|googlemail)\.com$/i;
+        if (!email || !GMAIL_REGEX.test(email)) {
+          return window.showToast('Please enter a valid Gmail address ending in @gmail.com (e.g. yourname@gmail.com). Typos like @gm.com are not accepted.', 'error');
         }
 
         sendOtpBtn.disabled = true;
         sendOtpBtn.textContent = 'Sending...';
 
         try {
-          await window.api.request('/api/auth/send-otp', {
+          const res = await window.api.request('/api/auth/send-otp', {
             method: 'POST',
             body: JSON.stringify({ email })
           });
 
           otpContainer.classList.remove('hidden');
-          otpMsg.textContent = `A 6-digit verification code was sent to ${email}. Please open your Gmail, copy the code, and enter it below.`;
-          window.showToast(`Verification code sent to ${email}. Please check your Gmail!`, 'info');
-          otpInput.value = '';
-          otpInput.focus();
+
+          if (res.emailDelivered) {
+            otpMsg.innerHTML = `<span class="text-emerald-700 dark:text-emerald-300 font-semibold">✓ Verification code delivered to <b>${email}</b>.</span><br/>Please open your Gmail (check inbox & spam folder) and enter the 6-digit code below:`;
+            window.showToast(`Verification code sent to ${email}! Check your Gmail inbox.`, 'success');
+            otpInput.value = '';
+            otpInput.focus();
+          } else {
+            // Live SMTP not yet configured on server
+            otpMsg.innerHTML = `
+              <div class="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-[11px] space-y-1">
+                <div><b>⚠️ Live Gmail Delivery Note:</b> Render needs <code>GMAIL_APP_PASSWORD</code> in Environment variables to send to real inboxes.</div>
+                <div>For testing right now, your 6-digit verification code is: <b class="font-mono text-sm text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border select-all">${res.otp}</b></div>
+              </div>
+            `;
+            window.showToast(`Test Code: ${res.otp} (Set GMAIL_APP_PASSWORD in Render for real Gmail)`, 'info');
+            otpInput.value = res.otp;
+            otpInput.focus();
+          }
         } catch (err) {
           window.showToast(err.message, 'error');
         } finally {

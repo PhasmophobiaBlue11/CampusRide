@@ -106,13 +106,6 @@ class LoginPage {
           <!-- Dedicated Single Registration Option -->
           <div class="mt-6 pt-5 border-t border-slate-200 dark:border-slate-800 text-center space-y-3">
             ${registrationCta}
-
-            <div class="pt-2 text-center">
-              <a href="#/launchpad" class="text-[11px] font-medium text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition inline-flex items-center gap-1">
-                <span>←</span>
-                <span>Return to CampusRide App Directory</span>
-              </a>
-            </div>
           </div>
 
         </div>

@@ -616,24 +616,46 @@ const server = http.createServer(async (req, res) => {
       // AUTH: Send Email OTP
       if (pathname === '/api/auth/send-otp' && req.method === 'POST') {
         const { email } = await readJsonBody(req);
-        if (!email || !email.includes('@')) return sendError(res, 400, 'Valid email address is required');
+        if (!email) return sendError(res, 400, 'Valid Gmail address is required');
         const cleanEmail = email.trim().toLowerCase();
+
+        // Strict Gmail validation (blocks typos like @gm.com, @gmai.com)
+        const GMAIL_REGEX = /^(?!.*\.\.)[a-z0-9][a-z0-9._%+-]{2,34}@(gmail|googlemail)\.com$/i;
+        if (!GMAIL_REGEX.test(cleanEmail)) {
+          return sendError(res, 400, 'Invalid Gmail address. Please enter a valid address ending in @gmail.com (e.g. yourname@gmail.com). Typos like @gm.com are not accepted.');
+        }
 
         // Generate 6-digit OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         storeOtp(cleanEmail, otp);
         console.log(`[CampusRide OTP] Generated 6-digit OTP for ${cleanEmail}: ${otp}`);
 
-        // Dispatch real email via Gmail SMTP (Nodemailer / TLS)
-        sendOtpEmail(cleanEmail, otp).catch(err => {
-          console.error('[CampusRide OTP Email] Async send error:', err.message);
-        });
+        // Dispatch real email via Gmail SMTP (Nodemailer / Direct TLS)
+        let mailResult = { sent: false };
+        try {
+          mailResult = await sendOtpEmail(cleanEmail, otp);
+        } catch (mailErr) {
+          console.error('[CampusRide OTP Email Error]', mailErr.message);
+          mailResult = { sent: false, error: mailErr.message };
+        }
 
-        // Do NOT leak OTP to client - user must open Gmail to check code
-        return sendJson(res, 200, {
-          success: true,
-          message: `A 6-digit verification code has been sent to ${cleanEmail}. Please check your Gmail inbox.`
-        });
+        if (mailResult && mailResult.sent) {
+          // Live email successfully delivered to Gmail inbox!
+          return sendJson(res, 200, {
+            success: true,
+            emailDelivered: true,
+            message: `A 6-digit verification code has been delivered to ${cleanEmail}. Please check your Gmail inbox (and Spam folder).`
+          });
+        } else {
+          // SMTP credentials (GMAIL_APP_PASSWORD) not configured on Render yet, or failed
+          console.log(`[CampusRide OTP Email] Live delivery not active (GMAIL_APP_PASSWORD not set). Providing code for test mode: ${otp}`);
+          return sendJson(res, 200, {
+            success: true,
+            emailDelivered: false,
+            otp: otp,
+            message: `Live email sending requires GMAIL_APP_PASSWORD in Render Environment variables. For testing, your 6-digit code is: ${otp}`
+          });
+        }
       }
 
       // AUTH: Verify Email OTP
