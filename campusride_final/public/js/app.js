@@ -18,21 +18,24 @@
   const appEl = document.getElementById('app');
 
   function detectAppRole() {
+    // 0. Hard lock from dedicated HTML wrapper (driver.html, parent.html, staff.html, admin.html)
+    if (window.CAMPUSRIDE_LOCKED_ROLE) return window.CAMPUSRIDE_LOCKED_ROLE;
+
     const host = window.location.hostname.toLowerCase();
     const pathname = window.location.pathname.toLowerCase();
     const hash = window.location.hash.toLowerCase();
 
-    // 1. Subdomain / Hostname: supports driver.*, campusride-driver.*, *.driver
-    if (host.startsWith('driver.') || host.includes('-driver') || host.endsWith('.driver')) return 'driver';
-    if (host.startsWith('parent.') || host.includes('-parent') || host.endsWith('.parent')) return 'parent';
-    if (host.startsWith('staff.') || host.includes('-staff') || host.endsWith('.staff')) return 'staff';
-    if (host.startsWith('admin.') || host.includes('-admin') || host.endsWith('.admin')) return 'admin';
+    // 1. Subdomain / Hostname: supports driver.*, campusride-driver.*, *.driver, xyz.parent, etc.
+    if (host.startsWith('driver.') || host.includes('-driver') || host.endsWith('.driver') || host.includes('.driver.')) return 'driver';
+    if (host.startsWith('parent.') || host.includes('-parent') || host.endsWith('.parent') || host.includes('.parent.')) return 'parent';
+    if (host.startsWith('staff.') || host.includes('-staff') || host.endsWith('.staff') || host.includes('.staff.')) return 'staff';
+    if (host.startsWith('admin.') || host.includes('-admin') || host.endsWith('.admin') || host.includes('.admin.')) return 'admin';
 
     // 2. Pathname: /driver, /parent, /staff, /admin
-    if (pathname === '/driver' || pathname.startsWith('/driver/')) return 'driver';
-    if (pathname === '/parent' || pathname.startsWith('/parent/')) return 'parent';
-    if (pathname === '/staff' || pathname.startsWith('/staff/')) return 'staff';
-    if (pathname === '/admin' || pathname.startsWith('/admin/')) return 'admin';
+    if (pathname === '/driver' || pathname.startsWith('/driver/') || pathname === '/driver.html') return 'driver';
+    if (pathname === '/parent' || pathname.startsWith('/parent/') || pathname === '/parent.html') return 'parent';
+    if (pathname === '/staff' || pathname.startsWith('/staff/') || pathname === '/staff.html') return 'staff';
+    if (pathname === '/admin' || pathname.startsWith('/admin/') || pathname === '/admin.html') return 'admin';
 
     // 3. Hash: #/driver, #/parent, #/staff, #/admin
     if (hash === '#/driver' || hash.startsWith('#/driver')) return 'driver';
@@ -112,10 +115,24 @@
       return;
     }
 
-    // Set active app role in storage to match the user's logged-in identity
+    // Determine actual role of authenticated user
     const userRole = user.role === 'admin' ? 'admin' :
                      user.driverProfile ? 'driver' :
                      user.parentProfile ? 'parent' : 'staff';
+
+    // STRICT APP ROLE MISMATCH GUARD:
+    // If user is currently in a dedicated app (e.g. Parent App) but logged into a Staff or Driver account:
+    // Disconnect that cross-role session and show the dedicated login for this app!
+    if (activeApp && activeApp !== userRole && user.role !== 'admin') {
+      window.api.setToken(null);
+      localStorage.setItem('campusride_app_role', activeApp);
+      appEl.innerHTML = window.LoginPage.render(activeApp);
+      window.LoginPage.attachEvents();
+      if (window.i18n) window.i18n.translateDOM();
+      return;
+    }
+
+    // Set active app role in storage to match the user's logged-in identity
     localStorage.setItem('campusride_app_role', userRole);
 
     const isDriver = userRole === 'driver';

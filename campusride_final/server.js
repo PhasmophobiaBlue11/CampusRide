@@ -468,9 +468,9 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { success: true, verified: true });
       }
 
-      // AUTH: Login
+      // AUTH: Login with Strict Role Gate Enforcement
       if (pathname === '/api/auth/login' && req.method === 'POST') {
-        const { email, password } = await readJsonBody(req);
+        const { email, password, required_role } = await readJsonBody(req);
         if (!email || !password) return sendError(res, 400, 'Email and password are required');
 
         const foundUser = db.prepare('SELECT * FROM users WHERE lower(email) = lower(?)').get(email.trim());
@@ -480,8 +480,28 @@ const server = http.createServer(async (req, res) => {
         const hash = hashPassword(password);
         if (foundUser.password_hash !== hash) return sendError(res, 401, 'Invalid email or password');
 
-        const token = createToken(foundUser.id);
         const profile = getUserProfile(foundUser.id);
+
+        // Strict Role Gate: Even with correct email & password, reject if not matching the app portal
+        if (required_role === 'parent') {
+          if (!profile.parentProfile) {
+            return sendError(res, 403, 'Access Denied: This is the Parent App. Your account is NOT registered as a Parent. Please open your dedicated portal.');
+          }
+        } else if (required_role === 'driver') {
+          if (!profile.driverProfile) {
+            return sendError(res, 403, 'Access Denied: This is the Driver App. Your account is NOT registered as a Driver. Please open your dedicated portal.');
+          }
+        } else if (required_role === 'staff') {
+          if (profile.role !== 'admin' && (profile.driverProfile || profile.parentProfile)) {
+            return sendError(res, 403, 'Access Denied: This is the Gate Staff App. Your account is NOT registered as Staff. Please open your dedicated portal.');
+          }
+        } else if (required_role === 'admin') {
+          if (profile.role !== 'admin') {
+            return sendError(res, 403, 'Access Denied: Master Administrator credentials required.');
+          }
+        }
+
+        const token = createToken(foundUser.id);
         return sendJson(res, 200, { token, user: profile });
       }
 
@@ -1171,10 +1191,34 @@ const server = http.createServer(async (req, res) => {
 
   // -------------------------------------------------------------
   // Static File Serving & Direct Dedicated App Routes
-  // (/driver, /parent, /staff, /admin, /launchpad)
+  // (/driver -> driver.html, /parent -> parent.html, /staff -> staff.html, /admin -> admin.html)
+  // Subdomains supported: xyz.parent, xyz.driver, xyz.staff, xyz.admin
   // -------------------------------------------------------------
-  if (pathname === '/driver' || pathname === '/parent' || pathname === '/staff' || pathname === '/admin' || pathname === '/launchpad' ||
-      pathname.startsWith('/driver/') || pathname.startsWith('/parent/') || pathname.startsWith('/staff/') || pathname.startsWith('/admin/')) {
+  const host = (req.headers.host || '').toLowerCase();
+  let dedicatedHtml = null;
+
+  if (pathname === '/parent' || pathname.startsWith('/parent/') || pathname === '/parent.html') {
+    dedicatedHtml = 'parent.html';
+  } else if (pathname === '/driver' || pathname.startsWith('/driver/') || pathname === '/driver.html') {
+    dedicatedHtml = 'driver.html';
+  } else if (pathname === '/staff' || pathname.startsWith('/staff/') || pathname === '/staff.html') {
+    dedicatedHtml = 'staff.html';
+  } else if (pathname === '/admin' || pathname.startsWith('/admin/') || pathname === '/admin.html') {
+    dedicatedHtml = 'admin.html';
+  } else if (host.includes('parent')) {
+    dedicatedHtml = 'parent.html';
+  } else if (host.includes('driver')) {
+    dedicatedHtml = 'driver.html';
+  } else if (host.includes('staff')) {
+    dedicatedHtml = 'staff.html';
+  } else if (host.includes('admin')) {
+    dedicatedHtml = 'admin.html';
+  }
+
+  const isAsset = pathname.includes('.') && !pathname.endsWith('.html');
+  if (dedicatedHtml && !isAsset) {
+    filePath = path.join(PUBLIC_DIR, dedicatedHtml);
+  } else if (!isAsset && (pathname === '/' || pathname === '/launchpad')) {
     filePath = path.join(PUBLIC_DIR, 'index.html');
   }
 
@@ -1188,7 +1232,7 @@ const server = http.createServer(async (req, res) => {
   // Check if file exists, else fallback to index.html for SPA routing
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {
-      filePath = path.join(PUBLIC_DIR, 'index.html');
+      filePath = path.join(PUBLIC_DIR, dedicatedHtml || 'index.html');
     }
 
     const ext = path.extname(filePath).toLowerCase();
@@ -1207,7 +1251,9 @@ const server = http.createServer(async (req, res) => {
     const contentType = mimeTypes[ext] || 'application/octet-stream';
     res.writeHead(200, {
       'Content-Type': contentType,
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
       'X-Content-Type-Options': 'nosniff'
     });
 

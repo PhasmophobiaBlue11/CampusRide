@@ -146,7 +146,7 @@ class LoginPage {
         btn.textContent = 'Verifying...';
 
         try {
-          const user = await window.api.login(email, password);
+          const user = await window.api.login(email, password, targetRole);
           window.showToast('Signed in successfully!', 'success');
           
           // Remember role in session
