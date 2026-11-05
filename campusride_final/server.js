@@ -26,6 +26,7 @@ try {
     if (cfg.gmail_user && !process.env.GMAIL_USER) process.env.GMAIL_USER = cfg.gmail_user;
     if (cfg.gmail_app_password && !process.env.GMAIL_APP_PASSWORD) process.env.GMAIL_APP_PASSWORD = cfg.gmail_app_password;
     if (cfg.smtp_pass && !process.env.SMTP_PASS) process.env.SMTP_PASS = cfg.smtp_pass;
+    if (cfg.google_client_id && !process.env.GOOGLE_CLIENT_ID) process.env.GOOGLE_CLIENT_ID = cfg.google_client_id;
   }
 } catch (e) {}
 
@@ -647,6 +648,14 @@ const server = http.createServer(async (req, res) => {
       const userId = getUserIdFromReq(req);
       const user = getUserProfile(userId);
 
+      // PUBLIC CONFIG
+      if (pathname === '/api/config' && req.method === 'GET') {
+        return sendJson(res, 200, {
+          googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+          permanentAdminEmail: PERMANENT_ADMIN_EMAIL
+        });
+      }
+
       // AUTH: Send Email OTP
       if (pathname === '/api/auth/send-otp' && req.method === 'POST') {
         const { email } = await readJsonBody(req);
@@ -688,6 +697,95 @@ const server = http.createServer(async (req, res) => {
         const valid = verifyOtp(cleanEmail, otp);
         if (!valid) return sendError(res, 400, 'Invalid or expired verification code');
         return sendJson(res, 200, { success: true, verified: true });
+      }
+
+      // AUTH: Google Account Verification / Existence Check (§Option 2: Continue with Google)
+      if (pathname === '/api/auth/google-check' && req.method === 'POST') {
+        const { email, role } = await readJsonBody(req);
+        if (!email) return sendError(res, 400, 'Valid Gmail address is required');
+        const cleanEmail = email.trim().toLowerCase();
+
+        // Check if this account is the Master Administrator
+        if (cleanEmail === PERMANENT_ADMIN_EMAIL.toLowerCase()) {
+          return sendJson(res, 200, {
+            exists: true,
+            isAdmin: true,
+            email: cleanEmail,
+            message: `This email (${cleanEmail}) is registered as Master Administrator. Please sign in via the Admin Console.`
+          });
+        }
+
+        const foundUser = db.prepare('SELECT * FROM users WHERE lower(email) = lower(?)').get(cleanEmail);
+        if (!foundUser) {
+          // Fresh, available email - ready for instant registration!
+          return sendJson(res, 200, {
+            exists: false,
+            isNew: true,
+            email: cleanEmail,
+            message: `Google account ${cleanEmail} verified successfully.`
+          });
+        }
+
+        // Account exists - determine role
+        const profile = getUserProfile(foundUser.id);
+        const userRole = profile.role === 'admin' ? 'admin' :
+                         profile.driverProfile ? 'driver' :
+                         profile.parentProfile ? 'parent' : 'staff';
+
+        return sendJson(res, 200, {
+          exists: true,
+          isNew: false,
+          email: cleanEmail,
+          role: userRole,
+          displayName: profile.display_name,
+          message: `An account with this email (${cleanEmail}) already exists as a ${userRole}.`
+        });
+      }
+
+      // AUTH: Google 1-Click Login
+      if (pathname === '/api/auth/google-login' && req.method === 'POST') {
+        const { email, required_role } = await readJsonBody(req);
+        if (!email) return sendError(res, 400, 'Email is required');
+        const cleanEmail = email.trim().toLowerCase();
+
+        // Reject admin login through non-admin Google button
+        if (cleanEmail === PERMANENT_ADMIN_EMAIL.toLowerCase()) {
+          if (required_role !== 'admin') {
+            return sendError(res, 403, `This email belongs to Master Administrator. Please sign in via the Admin Console with your admin credentials.`);
+          }
+        }
+
+        const foundUser = db.prepare('SELECT * FROM users WHERE lower(email) = lower(?)').get(cleanEmail);
+        if (!foundUser) {
+          return sendError(res, 404, `No account found with ${cleanEmail}. Please create an account first.`);
+        }
+        if (foundUser.blocked) {
+          return sendError(res, 403, 'Account is inactive or blocked.');
+        }
+
+        const profile = getUserProfile(foundUser.id);
+
+        // Strict Role Gate
+        if (required_role === 'parent') {
+          if (!profile.parentProfile) {
+            return sendError(res, 403, 'Access Denied: This account is NOT registered as a Parent. Please open your dedicated portal.');
+          }
+        } else if (required_role === 'driver') {
+          if (!profile.driverProfile) {
+            return sendError(res, 403, 'Access Denied: This account is NOT registered as a Driver. Please open your dedicated portal.');
+          }
+        } else if (required_role === 'staff') {
+          if (profile.role !== 'admin' && (profile.driverProfile || profile.parentProfile)) {
+            return sendError(res, 403, 'Access Denied: This account is NOT registered as Gate Staff. Please open your dedicated portal.');
+          }
+        } else if (required_role === 'admin') {
+          if (profile.role !== 'admin') {
+            return sendError(res, 403, 'Access Denied: Master Administrator credentials required.');
+          }
+        }
+
+        const token = createToken(foundUser.id);
+        return sendJson(res, 200, { token, user: profile });
       }
 
       // AUTH: Login with Strict Role Gate Enforcement

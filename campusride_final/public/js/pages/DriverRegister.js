@@ -26,6 +26,29 @@ class DriverRegisterPage {
             </p>
           </div>
 
+          <!-- 1-Click Google Verification (No OTP Needed!) -->
+          <div class="mb-5 p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent border border-amber-200 dark:border-amber-900/50 space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <span>⚡</span> Continue with Google
+              </span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                No OTP Needed
+              </span>
+            </div>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+              Select your Google account from your device to verify instantly and skip OTP codes.
+            </p>
+            <div id="driver-google-slot">
+              ${window.GoogleAuth ? window.GoogleAuth.renderButton('Continue with Google (No OTP)', 'driver-google-btn') : ''}
+            </div>
+          </div>
+
+          <div class="relative my-4">
+            <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200 dark:border-slate-800"></div></div>
+            <div class="relative flex justify-center text-[10px] uppercase"><span class="bg-white dark:bg-slate-900 px-2 text-slate-400 font-semibold tracking-wider">Or register manually</span></div>
+          </div>
+
           <form id="driver-reg-form" class="space-y-4">
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Full Driver Name</label>
@@ -114,6 +137,43 @@ class DriverRegisterPage {
         const isPass = passInput.type === 'password';
         passInput.type = isPass ? 'text' : 'password';
         toggleBtn.textContent = isPass ? '🙈' : '👁️';
+      };
+    }
+
+    // 1-Click Google Verification (No OTP Needed!)
+    const googleBtn = document.getElementById('driver-google-btn');
+    if (googleBtn && window.GoogleAuth) {
+      googleBtn.onclick = () => {
+        window.GoogleAuth.openAccountChooser({
+          mode: 'register',
+          targetRole: 'driver',
+          onSuccess: (acc) => {
+            emailVerified = true;
+            const emailInput = document.getElementById('driver-email');
+            const emailBadge = document.getElementById('driver-email-badge');
+            const sendOtpBtn = document.getElementById('driver-send-otp-btn');
+            const otpContainer = document.getElementById('driver-otp-container');
+            const nameInput = document.getElementById('driver-name');
+
+            if (emailInput) {
+              emailInput.value = acc.email;
+              emailInput.readOnly = true;
+              emailInput.classList.add('bg-emerald-50/50', 'dark:bg-emerald-950/20', 'border-emerald-400');
+            }
+            if (nameInput && !nameInput.value && acc.name) {
+              nameInput.value = acc.name;
+            }
+            if (emailBadge) {
+              emailBadge.classList.remove('hidden');
+              emailBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300';
+              emailBadge.textContent = '✓ Google Verified (No OTP)';
+            }
+            if (sendOtpBtn) sendOtpBtn.classList.add('hidden');
+            if (otpContainer) otpContainer.classList.add('hidden');
+
+            window.showToast(`Google account verified (${acc.email}). No OTP needed!`, 'success');
+          }
+        });
       };
     }
 

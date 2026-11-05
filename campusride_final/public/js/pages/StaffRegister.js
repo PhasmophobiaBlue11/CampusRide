@@ -22,8 +22,31 @@ class StaffRegisterPage {
             <span class="text-3xl">🛂</span>
             <h1 class="text-xl font-bold text-slate-900 dark:text-white mt-2">Gate Staff Onboarding</h1>
             <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Registered gate staff require email OTP verification and administrator approval.
+              Verify your email and complete staff details for administrator approval.
             </p>
+          </div>
+
+          <!-- 1-Click Google Verification (No OTP Needed!) -->
+          <div class="mb-5 p-3.5 rounded-2xl bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-transparent border border-blue-200 dark:border-blue-900/50 space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <span>⚡</span> Continue with Google
+              </span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                No OTP Needed
+              </span>
+            </div>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+              Select your Google account from your device to verify instantly and skip OTP codes.
+            </p>
+            <div id="staff-google-slot">
+              ${window.GoogleAuth ? window.GoogleAuth.renderButton('Continue with Google (No OTP)', 'staff-google-btn') : ''}
+            </div>
+          </div>
+
+          <div class="relative my-4">
+            <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200 dark:border-slate-800"></div></div>
+            <div class="relative flex justify-center text-[10px] uppercase"><span class="bg-white dark:bg-slate-900 px-2 text-slate-400 font-semibold tracking-wider">Or register manually</span></div>
           </div>
 
           <form id="staff-reg-form" class="space-y-4">
@@ -116,6 +139,43 @@ class StaffRegisterPage {
     };
     setupToggle('toggle-staff-pass', 'staff-pass');
     setupToggle('toggle-staff-pass-confirm', 'staff-pass-confirm');
+
+    // 1-Click Google Verification (No OTP Needed!)
+    const googleBtn = document.getElementById('staff-google-btn');
+    if (googleBtn && window.GoogleAuth) {
+      googleBtn.onclick = () => {
+        window.GoogleAuth.openAccountChooser({
+          mode: 'register',
+          targetRole: 'staff',
+          onSuccess: (acc) => {
+            emailVerified = true;
+            const emailInput = document.getElementById('staff-email');
+            const emailBadge = document.getElementById('staff-email-badge');
+            const sendOtpBtn = document.getElementById('staff-send-otp-btn');
+            const otpContainer = document.getElementById('staff-otp-container');
+            const nameInput = document.getElementById('staff-name');
+
+            if (emailInput) {
+              emailInput.value = acc.email;
+              emailInput.readOnly = true;
+              emailInput.classList.add('bg-emerald-50/50', 'dark:bg-emerald-950/20', 'border-emerald-400');
+            }
+            if (nameInput && !nameInput.value && acc.name) {
+              nameInput.value = acc.name;
+            }
+            if (emailBadge) {
+              emailBadge.classList.remove('hidden');
+              emailBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300';
+              emailBadge.textContent = '✓ Google Verified (No OTP)';
+            }
+            if (sendOtpBtn) sendOtpBtn.classList.add('hidden');
+            if (otpContainer) otpContainer.classList.add('hidden');
+
+            window.showToast(`Google account verified (${acc.email}). No OTP needed!`, 'success');
+          }
+        });
+      };
+    }
 
     // OTP Send & Verify
     const sendOtpBtn = document.getElementById('staff-send-otp-btn');

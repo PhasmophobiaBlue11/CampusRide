@@ -103,6 +103,17 @@ class LoginPage {
             </button>
           </form>
 
+          ${!isAdmin ? `
+            <div class="relative my-4">
+              <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200 dark:border-slate-800"></div></div>
+              <div class="relative flex justify-center text-[10px] uppercase"><span class="bg-white dark:bg-slate-900 px-2 text-slate-400 font-semibold tracking-wider">Or continue with</span></div>
+            </div>
+
+            <div id="google-login-slot">
+              ${window.GoogleAuth ? window.GoogleAuth.renderButton('Continue with Google', 'login-google-btn') : ''}
+            </div>
+          ` : ''}
+
           <!-- Dedicated Single Registration Option -->
           <div class="mt-6 pt-5 border-t border-slate-200 dark:border-slate-800 text-center space-y-3">
             ${registrationCta}
@@ -153,6 +164,18 @@ class LoginPage {
           btn.disabled = false;
           btn.textContent = 'Sign In';
         }
+      };
+    }
+
+    // Google Sign-In Event Handler
+    const googleBtn = document.getElementById('login-google-btn');
+    if (googleBtn && window.GoogleAuth) {
+      const targetRole = document.getElementById('login-target-role').value;
+      googleBtn.onclick = () => {
+        window.GoogleAuth.openAccountChooser({
+          mode: 'login',
+          targetRole: targetRole
+        });
       };
     }
   }
