@@ -297,8 +297,8 @@
             <span>Drivers</span>
           </a>
           <a href="#/directories" class="flex flex-col items-center gap-1 ${path === '/directories' ? 'text-purple-600 dark:text-purple-400' : 'hover:text-slate-900 dark:hover:text-white'}">
-            <span class="text-lg">👥</span>
-            <span>Staff</span>
+            <span class="text-lg">👨‍👩‍👧</span>
+            <span>Parents</span>
           </a>
           <a href="#/settings" class="flex flex-col items-center gap-1 ${path === '/settings' ? 'text-purple-600 dark:text-purple-400' : 'hover:text-slate-900 dark:hover:text-white'}">
             <span class="text-lg">⚙️</span>
@@ -307,7 +307,7 @@
         </nav>
       `;
     } else {
-      // 🏢 Gate Staff Navigation
+      // 🏢 Gate Staff Navigation (Dedicated Options for Drivers & Parents)
       bottomNavHtml = `
         <nav class="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-2 py-2 flex items-center justify-around text-[10px] font-bold text-slate-500 shadow-lg">
           <a href="#/" class="flex flex-col items-center gap-1 ${path === '/' || path === '' ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-white'}">
@@ -318,13 +318,13 @@
             <span class="text-lg">📷</span>
             <span>Scan Pass</span>
           </a>
-          <a href="#/registration-scanner" class="flex flex-col items-center gap-1 ${path === '/registration-scanner' ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-white'}">
-            <span class="text-lg">📝</span>
-            <span>Register</span>
+          <a href="#/drivers" class="flex flex-col items-center gap-1 ${path === '/drivers' ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-lg">🚌</span>
+            <span>Drivers</span>
           </a>
           <a href="#/directories" class="flex flex-col items-center gap-1 ${path === '/directories' ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-white'}">
-            <span class="text-lg">👥</span>
-            <span>Contacts</span>
+            <span class="text-lg">👨‍👩‍👧</span>
+            <span>Parents</span>
           </a>
           <a href="#/settings" class="flex flex-col items-center gap-1 ${path === '/settings' ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-white'}">
             <span class="text-lg">⚙️</span>

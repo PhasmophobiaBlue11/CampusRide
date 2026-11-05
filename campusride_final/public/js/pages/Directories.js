@@ -1,20 +1,27 @@
-// CampusRide — Staff & Parent Directories (§7.7)
+// CampusRide — Staff View: Dedicated Drivers & Parents Directories (§7.7)
+// Provides two distinct options: (1) Drivers Directory, (2) Parents Directory
 class DirectoriesPage {
   static async render(user) {
-    let staff = [];
+    let drivers = [];
     let parents = [];
+    let staff = [];
 
     try {
-      const [sRes, pRes] = await Promise.all([
-        window.api.request('/api/directories/staff'),
-        window.api.request('/api/directories/parents')
+      const [dRes, pRes, sRes] = await Promise.all([
+        window.api.request('/api/drivers'),
+        window.api.request('/api/directories/parents'),
+        window.api.request('/api/directories/staff')
       ]);
-      staff = sRes.staff || [];
+      drivers = dRes.drivers || [];
       parents = pRes.parents || [];
+      staff = sRes.staff || [];
     } catch {}
 
+    const hash = window.location.hash || '';
+    const showParentsFirst = hash.includes('parent');
+
     return `
-      <div class="max-w-6xl mx-auto px-4 py-6 space-y-4">
+      <div class="max-w-6xl mx-auto px-4 py-6 space-y-5">
         <!-- Back Button -->
         <div>
           <button type="button" onclick="window.goBack()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer select-none">
@@ -23,104 +30,152 @@ class DirectoriesPage {
         </div>
 
         <div>
-          <h1 class="text-2xl font-black text-slate-900 dark:text-white">Campus Directories</h1>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Authorized contacts for gate staff, administration, and parent routes.</p>
+          <h1 class="text-2xl font-black text-slate-900 dark:text-white">Registered Accounts Directory</h1>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Gate Staff registry view. Select an option below to browse all registered Driver and Parent accounts.
+          </p>
         </div>
 
-        <!-- Tabs -->
-        <div class="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
-          <button type="button" id="dir-tab-staff" class="px-4 py-2 rounded-xl text-xs font-bold transition bg-blue-600 text-white shadow-md cursor-pointer">
-            🛂 Gate & Security Staff (${staff.length})
+        <!-- Two Dedicated Options (Drivers vs Parents) -->
+        <div class="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl max-w-lg">
+          <button type="button" id="dir-tab-drivers" class="py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 ${showParentsFirst ? 'text-slate-600 dark:text-slate-400 hover:text-slate-900' : 'bg-amber-500 text-white shadow-md'}">
+            <span>🚌 Drivers</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded-full ${showParentsFirst ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200' : 'bg-white/25 text-white'}">${drivers.length}</span>
           </button>
-          <button type="button" id="dir-tab-parents" class="px-4 py-2 rounded-xl text-xs font-bold transition bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 cursor-pointer">
-            👨‍👩‍👧 Parent Accounts & Addresses (${parents.length})
+          <button type="button" id="dir-tab-parents" class="py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 ${showParentsFirst ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'}">
+            <span>👨‍👩‍👧 Parents</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded-full ${showParentsFirst ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'}">${parents.length}</span>
           </button>
         </div>
 
-        <!-- Staff Directory Grid -->
-        <div id="grid-staff" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in-up">
-          ${staff.length === 0 ? `
-            <div class="col-span-full text-center py-10 text-slate-400 text-xs">No staff accounts registered yet.</div>
-          ` : staff.map(s => `
-            <div class="cr-card p-5 space-y-3">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold flex items-center justify-center">
-                  👤
+        <!-- 1. DRIVERS DIRECTORY GRID -->
+        <div id="grid-drivers" class="${showParentsFirst ? 'hidden ' : ''}space-y-3 animate-fade-in-up">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <span>🚌 Registered Transport Drivers (${drivers.length})</span>
+            </h2>
+            <a href="#/drivers" class="text-xs text-amber-600 dark:text-amber-400 hover:underline font-semibold">
+              Manage / Add Driver Pass →
+            </a>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            ${drivers.length === 0 ? `
+              <div class="col-span-full cr-card p-10 text-center text-slate-400 text-xs">
+                No transport drivers registered yet. Tap "+ Register Driver" in Gate Operations.
+              </div>
+            ` : drivers.map(d => `
+              <div class="cr-card p-5 space-y-3 border-l-4 border-l-amber-500">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">
+                    ${d.label}
+                  </span>
+                  <span class="text-[10px] font-semibold text-slate-400 uppercase">
+                    ${d.vehicle_type === '2_wheeler' ? '🛵 2-Wheeler' : '🚌 4-Wheeler Van'}
+                  </span>
                 </div>
+
                 <div>
-                  <h3 class="font-bold text-sm text-slate-900 dark:text-white">${s.full_name}</h3>
-                  <div class="text-[11px] text-slate-500">${s.notes || 'Campus Gate Officer'}</div>
+                  <h3 class="font-bold text-base text-slate-900 dark:text-white">${d.driver_name}</h3>
+                  <div class="font-mono text-xs font-bold text-slate-600 dark:text-slate-300 mt-0.5">
+                    Plate: ${d.van_no}
+                  </div>
+                  <div class="text-xs text-slate-500 mt-1">
+                    📞 ${d.phone || 'No phone recorded'}
+                  </div>
                 </div>
-              </div>
-              <div class="text-xs text-slate-500 space-y-1">
-                <div>📧 ${s.email}</div>
-              </div>
-              <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
-                <a href="tel:${s.phone}" class="cr-btn cr-btn-primary w-full py-1.5 text-xs">
-                  📞 Call ${s.phone}
-                </a>
-              </div>
-            </div>
-          `).join('')}
-        </div>
 
-        <!-- Parent Directory Grid (initially hidden) -->
-        <div id="grid-parents" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in-up">
-          ${parents.length === 0 ? `
-            <div class="col-span-full text-center py-10 text-slate-400 text-xs">No parent accounts registered yet.</div>
-          ` : parents.map(p => `
-            <div class="cr-card p-5 space-y-3">
-              <div>
-                <h3 class="font-bold text-sm text-slate-900 dark:text-white">${p.name}</h3>
-                <div class="text-xs text-blue-600 dark:text-blue-400 font-medium mt-0.5">
-                  Vans: <b>${p.vans || 'None assigned'}</b>
-                </div>
-                <div class="text-[11px] text-slate-400 mt-0.5">
-                  Children: ${p.children_names || '—'}
-                </div>
-              </div>
-
-              <div class="text-xs text-slate-600 dark:text-slate-300">
-                🏠 ${p.address || 'Live GPS Location'}
-              </div>
-
-              <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
-                <a href="tel:${p.phone}" class="cr-btn cr-btn-secondary flex-1 py-1.5 text-xs">
-                  📞 Call
-                </a>
-                ${p.address_lat && p.address_lng ? `
-                  <a href="https://www.google.com/maps/dir/?api=1&destination=${p.address_lat},${p.address_lng}" target="_blank"
-                     class="cr-btn cr-btn-primary flex-1 py-1.5 text-xs">
-                    🗺️ Google Maps
+                <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+                  ${d.phone ? `
+                    <a href="tel:${d.phone}" class="cr-btn bg-amber-500 hover:bg-amber-400 text-white flex-1 py-1.5 text-xs text-center font-bold">
+                      📞 Call Driver
+                    </a>
+                  ` : ''}
+                  <a href="#/drivers" class="cr-btn cr-btn-secondary flex-1 py-1.5 text-xs text-center">
+                    🎟️ View Pass
                   </a>
-                ` : ''}
+                </div>
               </div>
-            </div>
-          `).join('')}
+            `).join('')}
+          </div>
         </div>
+
+        <!-- 2. PARENTS DIRECTORY GRID -->
+        <div id="grid-parents" class="${showParentsFirst ? '' : 'hidden '}space-y-3 animate-fade-in-up">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <span>👨‍👩‍👧 Registered Parent Accounts (${parents.length})</span>
+            </h2>
+            <span class="text-xs text-slate-400">Derived from student pickups</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            ${parents.length === 0 ? `
+              <div class="col-span-full cr-card p-10 text-center text-slate-400 text-xs">
+                No parent accounts registered yet.
+              </div>
+            ` : parents.map(p => `
+              <div class="cr-card p-5 space-y-3 border-l-4 border-l-indigo-500">
+                <div class="flex items-center justify-between">
+                  <h3 class="font-bold text-base text-slate-900 dark:text-white">${p.name}</h3>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300">
+                    Parent
+                  </span>
+                </div>
+
+                <div class="space-y-1 text-xs">
+                  <div class="text-blue-600 dark:text-blue-400 font-semibold">
+                    🚌 Assigned Vans: <b>${p.vans || 'Unassigned'}</b>
+                  </div>
+                  <div class="text-slate-600 dark:text-slate-300">
+                    🧒 Children: <b>${p.children_names || '—'}</b>
+                  </div>
+                  <div class="text-slate-500 truncate" title="${p.address || ''}">
+                    📍 ${p.address || 'Live GPS Coordinates'}
+                  </div>
+                </div>
+
+                <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+                  ${p.phone ? `
+                    <a href="tel:${p.phone}" class="cr-btn bg-indigo-600 hover:bg-indigo-500 text-white flex-1 py-1.5 text-xs text-center font-bold">
+                      📞 Call Parent
+                    </a>
+                  ` : ''}
+                  ${p.address_lat && p.address_lng ? `
+                    <a href="https://www.google.com/maps/dir/?api=1&destination=${p.address_lat},${p.address_lng}" target="_blank"
+                       class="cr-btn cr-btn-secondary flex-1 py-1.5 text-xs text-center">
+                      🗺️ Google Maps
+                    </a>
+                  ` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
       </div>
     `;
   }
 
   static attachEvents() {
-    const tabStaff = document.getElementById('dir-tab-staff');
+    const tabDrivers = document.getElementById('dir-tab-drivers');
     const tabParents = document.getElementById('dir-tab-parents');
-    const gridStaff = document.getElementById('grid-staff');
+    const gridDrivers = document.getElementById('grid-drivers');
     const gridParents = document.getElementById('grid-parents');
 
-    if (tabStaff && tabParents && gridStaff && gridParents) {
-      tabStaff.onclick = () => {
-        tabStaff.className = 'px-4 py-2 rounded-xl text-xs font-bold transition bg-blue-600 text-white shadow-md cursor-pointer';
-        tabParents.className = 'px-4 py-2 rounded-xl text-xs font-bold transition bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 cursor-pointer';
-        gridStaff.classList.remove('hidden');
+    if (tabDrivers && tabParents && gridDrivers && gridParents) {
+      tabDrivers.onclick = () => {
+        tabDrivers.className = 'py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 bg-amber-500 text-white shadow-md';
+        tabParents.className = 'py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900';
+        gridDrivers.classList.remove('hidden');
         gridParents.classList.add('hidden');
       };
 
       tabParents.onclick = () => {
-        tabParents.className = 'px-4 py-2 rounded-xl text-xs font-bold transition bg-blue-600 text-white shadow-md cursor-pointer';
-        tabStaff.className = 'px-4 py-2 rounded-xl text-xs font-bold transition bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 cursor-pointer';
+        tabParents.className = 'py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-md';
+        tabDrivers.className = 'py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900';
         gridParents.classList.remove('hidden');
-        gridStaff.classList.add('hidden');
+        gridDrivers.classList.add('hidden');
       };
     }
   }
