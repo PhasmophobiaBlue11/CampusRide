@@ -58,15 +58,15 @@ class ParentRegisterPage {
             <div id="parent-otp-container" class="hidden p-3.5 rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20 space-y-2">
               <div class="flex items-center justify-between text-xs">
                 <span class="font-semibold text-blue-900 dark:text-blue-300">Enter 6-Digit Email OTP:</span>
-                <span id="parent-otp-hint" class="font-mono font-bold text-blue-600 dark:text-blue-400"></span>
+                <span class="text-[11px] text-blue-600 dark:text-blue-400">Check your Gmail inbox</span>
               </div>
               <div class="flex gap-2">
-                <input type="text" id="parent-otp-input" maxlength="6" class="cr-input text-center tracking-widest font-mono font-bold text-base flex-1" placeholder="123456" />
+                <input type="text" id="parent-otp-input" maxlength="6" class="cr-input text-center tracking-widest font-mono font-bold text-base flex-1" placeholder="123456" autocomplete="off" />
                 <button type="button" id="parent-verify-otp-btn" class="cr-btn cr-btn-primary px-4 py-2 text-xs font-bold whitespace-nowrap">
                   Verify Code
                 </button>
               </div>
-              <p id="parent-otp-msg" class="text-[11px] text-slate-500 dark:text-slate-400"></p>
+              <p id="parent-otp-msg" class="text-[11px] text-slate-600 dark:text-slate-300 font-medium"></p>
             </div>
 
             <div>
@@ -134,7 +134,6 @@ class ParentRegisterPage {
     const emailInput = document.getElementById('parent-email');
     const otpContainer = document.getElementById('parent-otp-container');
     const otpInput = document.getElementById('parent-otp-input');
-    const otpHint = document.getElementById('parent-otp-hint');
     const otpMsg = document.getElementById('parent-otp-msg');
     const verifyOtpBtn = document.getElementById('parent-verify-otp-btn');
     const emailBadge = document.getElementById('parent-email-badge');
@@ -150,20 +149,15 @@ class ParentRegisterPage {
         sendOtpBtn.textContent = 'Sending...';
 
         try {
-          const res = await window.api.request('/api/auth/send-otp', {
+          await window.api.request('/api/auth/send-otp', {
             method: 'POST',
             body: JSON.stringify({ email })
           });
 
           otpContainer.classList.remove('hidden');
-          otpMsg.textContent = `A 6-digit code has been generated for ${email}.`;
-          if (res.otp) {
-            otpHint.textContent = `Code: ${res.otp}`;
-            window.showToast(`Verification code sent! (Your OTP: ${res.otp})`, 'success');
-            otpInput.value = res.otp; // Auto-prefill for convenience
-          } else {
-            window.showToast(`Verification code sent to ${email}`, 'success');
-          }
+          otpMsg.textContent = `A 6-digit verification code was sent to ${email}. Please open your Gmail, copy the code, and enter it below.`;
+          window.showToast(`Verification code sent to ${email}. Please check your Gmail!`, 'info');
+          otpInput.value = '';
           otpInput.focus();
         } catch (err) {
           window.showToast(err.message, 'error');

@@ -4,7 +4,15 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const tls = require('node:tls');
 const { DatabaseSync } = require('node:sqlite');
+
+let nodemailer = null;
+try {
+  nodemailer = require('nodemailer');
+} catch (e) {
+  // Optional dependency - direct TLS fallback is used
+}
 
 const PORT = process.env.PORT || 8000;
 const DB_PATH = path.join(__dirname, 'campusride.db');
@@ -179,6 +187,171 @@ function verifyOtp(email, otp) {
   if (!row) return false;
   if (Date.now() > row.expires_at) return false;
   return row.otp === otp.trim();
+}
+
+// Send OTP to real Gmail via Nodemailer or Direct TLS socket
+async function sendOtpEmail(toEmail, otp) {
+  const user = process.env.SMTP_USER || process.env.GMAIL_USER || 'adphasmo@gmail.com';
+  const pass = (process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
+  const subject = `CampusRide Email Verification Code: ${otp}`;
+  const textBody = `Hello,\n\nYour 6-digit CampusRide verification code is: ${otp}\n\nThis code is valid for 10 minutes.\n\nBest regards,\nCampusRide Team`;
+  const htmlBody = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h2 style="color: #2563eb; margin: 0; font-size: 24px;">🚌 CampusRide</h2>
+        <p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">Secure Campus Transportation Portal</p>
+      </div>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 24px; text-align: center; margin-bottom: 20px;">
+        <p style="font-size: 14px; color: #475569; margin: 0 0 12px 0;">Your 6-digit verification code is:</p>
+        <div style="font-size: 36px; font-weight: 800; font-family: monospace; letter-spacing: 8px; color: #1d4ed8; padding: 8px 16px; background: #eff6ff; border-radius: 8px; display: inline-block;">
+          ${otp}
+        </div>
+        <p style="font-size: 12px; color: #94a3b8; margin: 14px 0 0 0;">⏱️ Valid for 10 minutes. Do not share this code.</p>
+      </div>
+      <p style="font-size: 12px; color: #64748b; line-height: 1.5; margin: 0 0 12px 0;">
+        Please enter this code on the registration screen to verify your email address.
+      </p>
+      <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;" />
+      <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">
+        © CampusRide Safe Transportation System
+      </p>
+    </div>
+  `;
+
+  if (!pass) {
+    console.log(`[CampusRide OTP Email] Verification OTP for ${toEmail} is: ${otp}`);
+    console.log(`[CampusRide OTP Email] To enable live email dispatch to real Gmail inboxes, set GMAIL_APP_PASSWORD in Render Environment variables.`);
+    return { sent: false, reason: 'GMAIL_APP_PASSWORD_NOT_SET' };
+  }
+
+  // If nodemailer is installed, use it
+  if (nodemailer) {
+    try {
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user, pass }
+      });
+      await transporter.sendMail({
+        from: `"CampusRide Verification" <${user}>`,
+        to: toEmail,
+        subject,
+        text: textBody,
+        html: htmlBody
+      });
+      console.log(`[CampusRide OTP Email] Delivered verification email to ${toEmail} via Nodemailer`);
+      return { sent: true };
+    } catch (nmErr) {
+      console.warn(`[CampusRide OTP Email] Nodemailer error (${nmErr.message}), falling back to direct TLS socket...`);
+    }
+  }
+
+  // Direct TLS socket to smtp.gmail.com:465
+  return new Promise((resolve) => {
+    let resolved = false;
+    const finish = (result) => {
+      if (!resolved) {
+        resolved = true;
+        resolve(result);
+      }
+    };
+
+    const socket = tls.connect({
+      host: 'smtp.gmail.com',
+      port: 465,
+      rejectUnauthorized: true,
+      timeout: 12000
+    }, () => {});
+
+    let step = 0;
+    let buffer = '';
+    socket.setEncoding('utf8');
+
+    socket.on('data', (chunk) => {
+      buffer += chunk;
+      const lines = buffer.split('\r\n').filter(Boolean);
+      const lastLine = lines[lines.length - 1] || '';
+
+      if (!/^\d{3} /.test(lastLine) && !/^\d{3}$/.test(lastLine)) {
+        return;
+      }
+      buffer = '';
+
+      try {
+        if (step === 0 && lastLine.startsWith('220')) {
+          step = 1;
+          socket.write('EHLO campusride.app\r\n');
+        } else if (step === 1 && lastLine.startsWith('250')) {
+          step = 2;
+          socket.write('AUTH LOGIN\r\n');
+        } else if (step === 2 && lastLine.startsWith('334')) {
+          step = 3;
+          socket.write(Buffer.from(user).toString('base64') + '\r\n');
+        } else if (step === 3 && lastLine.startsWith('334')) {
+          step = 4;
+          socket.write(Buffer.from(pass).toString('base64') + '\r\n');
+        } else if (step === 4 && lastLine.startsWith('235')) {
+          step = 5;
+          socket.write(`MAIL FROM:<${user}>\r\n`);
+        } else if (step === 5 && lastLine.startsWith('250')) {
+          step = 6;
+          socket.write(`RCPT TO:<${toEmail}>\r\n`);
+        } else if (step === 6 && lastLine.startsWith('250')) {
+          step = 7;
+          socket.write('DATA\r\n');
+        } else if (step === 7 && lastLine.startsWith('354')) {
+          step = 8;
+          const boundary = '----=_Part_' + Date.now();
+          const rawMessage = [
+            `From: "CampusRide Verification" <${user}>`,
+            `To: <${toEmail}>`,
+            `Subject: ${subject}`,
+            `MIME-Version: 1.0`,
+            `Content-Type: multipart/alternative; boundary="${boundary}"`,
+            ``,
+            `--${boundary}`,
+            `Content-Type: text/plain; charset=UTF-8`,
+            `Content-Transfer-Encoding: 7bit`,
+            ``,
+            textBody,
+            ``,
+            `--${boundary}`,
+            `Content-Type: text/html; charset=UTF-8`,
+            `Content-Transfer-Encoding: 7bit`,
+            ``,
+            htmlBody,
+            ``,
+            `--${boundary}--`,
+            `.`
+          ].join('\r\n') + '\r\n';
+          socket.write(rawMessage);
+        } else if (step === 8 && lastLine.startsWith('250')) {
+          step = 9;
+          socket.write('QUIT\r\n');
+          console.log(`[CampusRide OTP Email] Delivered verification code to ${toEmail} via direct Gmail TLS`);
+          finish({ sent: true });
+          socket.end();
+        } else if (/^[45]\d\d/.test(lastLine)) {
+          console.error(`[CampusRide OTP Email] SMTP rejected with: ${lastLine}`);
+          finish({ sent: false, error: lastLine });
+          socket.destroy();
+        }
+      } catch (err) {
+        console.error(`[CampusRide OTP Email] Error in SMTP stream:`, err.message);
+        finish({ sent: false, error: err.message });
+        socket.destroy();
+      }
+    });
+
+    socket.on('timeout', () => {
+      finish({ sent: false, error: 'timeout' });
+      socket.destroy();
+    });
+
+    socket.on('error', (err) => {
+      console.error('[CampusRide OTP Email] Socket error:', err.message);
+      finish({ sent: false, error: err.message });
+    });
+  });
 }
 
 // Simple deterministic hash for demo authentication
@@ -451,10 +624,15 @@ const server = http.createServer(async (req, res) => {
         storeOtp(cleanEmail, otp);
         console.log(`[CampusRide OTP] Generated 6-digit OTP for ${cleanEmail}: ${otp}`);
 
+        // Dispatch real email via Gmail SMTP (Nodemailer / TLS)
+        sendOtpEmail(cleanEmail, otp).catch(err => {
+          console.error('[CampusRide OTP Email] Async send error:', err.message);
+        });
+
+        // Do NOT leak OTP to client - user must open Gmail to check code
         return sendJson(res, 200, {
           success: true,
-          message: `Verification code sent to ${cleanEmail}`,
-          otp: otp
+          message: `A 6-digit verification code has been sent to ${cleanEmail}. Please check your Gmail inbox.`
         });
       }
 
