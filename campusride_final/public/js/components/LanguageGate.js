@@ -3,7 +3,8 @@ class LanguageGate {
   static check() {
     const chosen = localStorage.getItem('campusride_lang');
     if (!chosen) {
-      LanguageGate.showModal();
+      localStorage.setItem('campusride_lang', 'en');
+      if (window.i18n) window.i18n.setLanguage('en');
     }
   }
 

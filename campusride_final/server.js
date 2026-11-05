@@ -1194,6 +1194,8 @@ const server = http.createServer(async (req, res) => {
   // (/driver -> driver.html, /parent -> parent.html, /staff -> staff.html, /admin -> admin.html)
   // Subdomains supported: xyz.parent, xyz.driver, xyz.staff, xyz.admin
   // -------------------------------------------------------------
+  let filePath = path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname.replace(/^\//, ''));
+
   const host = (req.headers.host || '').toLowerCase();
   let dedicatedHtml = null;
 

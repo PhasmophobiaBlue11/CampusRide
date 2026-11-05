@@ -348,11 +348,18 @@
     if (window.i18n) window.i18n.translateDOM();
   }
 
-  window.addEventListener('hashchange', route);
-  window.addEventListener('load', () => {
-    window.LanguageGate.check();
+  function initApp() {
+    if (window.LanguageGate) window.LanguageGate.check();
     route();
-  });
+  }
+
+  window.addEventListener('hashchange', route);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+  } else {
+    initApp();
+  }
+
   window.addEventListener('campusride_lang_change', () => {
     if (window.i18n) window.i18n.translateDOM();
   });
