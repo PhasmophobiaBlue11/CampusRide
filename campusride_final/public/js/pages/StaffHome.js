@@ -23,55 +23,37 @@ class StaffHomePage {
 
     return `
       <div class="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        <!-- Hero Gate Banner -->
-        <div class="bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 text-white p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div>
-            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-xs font-semibold mb-2">
-              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              Gate 1 Dispatch & Entry/Exit Control
+        <!-- Compact Gate Transit Status Table (No scrolling needed) -->
+        <div class="cr-card p-3 sm:p-4 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 rounded-2xl">
+          <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <h2 class="text-xs sm:text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Gate Activity Today</h2>
             </div>
-            <h1 class="text-2xl sm:text-3xl font-black">Gate Operations Center</h1>
-            <p class="text-xs sm:text-sm text-blue-100 mt-1 max-w-xl">
-              Scan pass QR codes to timestamp vehicle entries/exits with automatic parent notifications and register incoming vehicles or staff.
-            </p>
+            <span class="text-[11px] font-semibold text-slate-400">Live Scans</span>
           </div>
-          <div class="flex flex-wrap gap-3">
-            <a href="#/entry-exit-scanner" class="cr-btn bg-white text-blue-900 hover:bg-blue-50 font-bold px-5 py-3 shadow-lg">
-              📷 Open Gate Scanner
-            </a>
-            <a href="#/registration-scanner" class="cr-btn bg-blue-900/60 hover:bg-blue-900/80 text-white border border-white/20 px-4 py-3">
-              📝 Register Driver / Staff
-            </a>
-          </div>
-        </div>
-
-        <!-- Metric Counter Tiles -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div class="cr-card p-5 border-l-4 border-l-emerald-500">
-            <div class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Inside Campus Now</div>
-            <div class="text-3xl font-black text-slate-900 dark:text-white mt-1 flex items-baseline gap-2">
-              <span>${currentlyInside}</span>
-              <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">vehicles active</span>
+          <div class="grid grid-cols-3 divide-x divide-slate-100 dark:divide-slate-800 text-center">
+            <div class="px-2 py-1">
+              <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1">
+                <span>🟢</span> In Campus
+              </div>
+              <div class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-0.5">${currentlyInside}</div>
+              <div class="text-[10px] text-slate-400 hidden sm:block">vehicles active</div>
             </div>
-            <p class="text-[11px] text-slate-400 mt-1">Calculated via alternating entry/exit scans</p>
-          </div>
-
-          <div class="cr-card p-5 border-l-4 border-l-blue-500">
-            <div class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Today's Entries</div>
-            <div class="text-3xl font-black text-slate-900 dark:text-white mt-1 flex items-baseline gap-2">
-              <span>${stats.entry || 0}</span>
-              <span class="text-xs font-semibold text-blue-600 dark:text-blue-400">logged</span>
+            <div class="px-2 py-1">
+              <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center justify-center gap-1">
+                <span>🔵</span> Entries
+              </div>
+              <div class="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 mt-0.5">${stats.entry || 0}</div>
+              <div class="text-[10px] text-slate-400 hidden sm:block">logged today</div>
             </div>
-            <p class="text-[11px] text-slate-400 mt-1">Parents alerted upon campus check-in</p>
-          </div>
-
-          <div class="cr-card p-5 border-l-4 border-l-purple-500">
-            <div class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Today's Exits</div>
-            <div class="text-3xl font-black text-slate-900 dark:text-white mt-1 flex items-baseline gap-2">
-              <span>${stats.exit || 0}</span>
-              <span class="text-xs font-semibold text-purple-600 dark:text-purple-400">logged</span>
+            <div class="px-2 py-1">
+              <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center justify-center gap-1">
+                <span>🟣</span> Exits
+              </div>
+              <div class="text-xl sm:text-2xl font-black text-purple-600 dark:text-purple-400 mt-0.5">${stats.exit || 0}</div>
+              <div class="text-[10px] text-slate-400 hidden sm:block">logged today</div>
             </div>
-            <p class="text-[11px] text-slate-400 mt-1">Safety alerts auto-cleared upon exit</p>
           </div>
         </div>
 
@@ -107,7 +89,7 @@ class StaffHomePage {
             </a>
 
             <!-- Option 2: Parents Directory -->
-            <a href="#/directories" class="cr-card p-5 no-underline text-inherit border-2 border-transparent hover:border-indigo-500 transition group flex items-center justify-between shadow-sm hover:shadow-md">
+            <a href="#/parents" class="cr-card p-5 no-underline text-inherit border-2 border-transparent hover:border-indigo-500 transition group flex items-center justify-between shadow-sm hover:shadow-md">
               <div class="flex items-center gap-4">
                 <div class="w-14 h-14 rounded-2xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-3xl group-hover:scale-110 transition shadow-sm shrink-0">
                   👨‍👩‍👧

@@ -9,11 +9,6 @@
     document.documentElement.classList.add('dark');
   }
 
-  // PWA install prompt handler
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    window.deferredPrompt = e;
-  });
 
   const appEl = document.getElementById('app');
 
@@ -53,7 +48,8 @@
   }
 
   async function route() {
-    const hash = window.location.hash.slice(1) || '/';
+    try {
+      const hash = window.location.hash.slice(1) || '/';
     const path = hash.split('?')[0];
     const activeApp = detectAppRole();
 
@@ -151,7 +147,7 @@
 
     // 2. Parent App Isolation: Only child tracking, contacts & settings allowed
     if (isParent) {
-      if (path !== '/' && path !== '' && path !== '/directories' && path !== '/settings') {
+      if (path !== '/' && path !== '' && path !== '/directories' && path !== '/parents' && path !== '/settings') {
         window.location.hash = '#/';
         return;
       }
@@ -226,7 +222,7 @@
     } else if (path === '/live-map') {
       pageHtml = await window.LiveMapPage.render(user);
       attachCallback = () => window.LiveMapPage.attachEvents(user);
-    } else if (path === '/directories') {
+    } else if (path === '/directories' || path === '/parents') {
       pageHtml = await window.DirectoriesPage.render(user);
       attachCallback = () => window.DirectoriesPage.attachEvents(user);
     } else if (path === '/settings') {
@@ -296,7 +292,7 @@
             <span class="text-lg">🚌</span>
             <span>Drivers</span>
           </a>
-          <a href="#/directories" class="flex flex-col items-center gap-1 ${path === '/directories' ? 'text-purple-600 dark:text-purple-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+          <a href="#/parents" class="flex flex-col items-center gap-1 ${path === '/directories' || path === '/parents' ? 'text-purple-600 dark:text-purple-400' : 'hover:text-slate-900 dark:hover:text-white'}">
             <span class="text-lg">👨‍👩‍👧</span>
             <span>Parents</span>
           </a>
@@ -322,7 +318,7 @@
             <span class="text-lg">🚌</span>
             <span>Drivers</span>
           </a>
-          <a href="#/directories" class="flex flex-col items-center gap-1 ${path === '/directories' ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+          <a href="#/parents" class="flex flex-col items-center gap-1 ${path === '/directories' || path === '/parents' ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-white'}">
             <span class="text-lg">👨‍👩‍👧</span>
             <span>Parents</span>
           </a>
@@ -346,7 +342,15 @@
     window.HeaderComponent.attachEvents(user);
     if (attachCallback) attachCallback();
     if (window.i18n) window.i18n.translateDOM();
+  } catch (err) {
+    console.error('[CampusRide Routing Error]:', err);
+    const activeApp = detectAppRole();
+    if (window.LoginPage) {
+      appEl.innerHTML = window.LoginPage.render(activeApp || 'staff');
+      window.LoginPage.attachEvents();
+    }
   }
+}
 
   function initApp() {
     if (window.LanguageGate) window.LanguageGate.check();

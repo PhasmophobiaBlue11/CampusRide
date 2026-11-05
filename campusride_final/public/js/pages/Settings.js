@@ -75,16 +75,7 @@ class SettingsPage {
           </div>
         ` : ''}
 
-        <!-- PWA Installation -->
-        <div class="cr-card p-6 space-y-2">
-          <h2 class="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-            <span>📱</span> Install App (PWA)
-          </h2>
-          <p class="text-xs text-slate-500">Install CampusRide onto your phone home screen for offline camera scanning and real-time alerts.</p>
-          <button id="pwa-install-btn" class="cr-btn cr-btn-secondary text-xs py-2 px-4">
-            Add to Home Screen
-          </button>
-        </div>
+
 
         <!-- Account Self-Deletion (§8.6) -->
         <div class="cr-card p-6 border-rose-300 dark:border-rose-900/40 bg-rose-50/20 dark:bg-rose-950/20 space-y-3">
@@ -177,17 +168,7 @@ class SettingsPage {
       };
     }
 
-    // PWA install trigger
-    const pwaBtn = document.getElementById('pwa-install-btn');
-    if (pwaBtn) {
-      pwaBtn.onclick = () => {
-        if (window.deferredPrompt) {
-          window.deferredPrompt.prompt();
-        } else {
-          window.showToast('To install, tap the Share/Menu icon in your browser and choose "Add to Home Screen"', 'info');
-        }
-      };
-    }
+
 
     // Self-delete
     const deleteBtn = document.getElementById('delete-my-account-btn');

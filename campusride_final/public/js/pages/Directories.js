@@ -18,7 +18,8 @@ class DirectoriesPage {
     } catch {}
 
     const hash = window.location.hash || '';
-    const showParentsFirst = hash.includes('parent');
+    // Show Parents by default when entering from Staff Dashboard or #/parents
+    const showParentsFirst = !hash.includes('driver');
 
     return `
       <div class="max-w-6xl mx-auto px-4 py-6 space-y-5">
