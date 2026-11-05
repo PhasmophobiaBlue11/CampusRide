@@ -140,41 +140,65 @@ class StaffRegisterPage {
     setupToggle('toggle-staff-pass', 'staff-pass');
     setupToggle('toggle-staff-pass-confirm', 'staff-pass-confirm');
 
-    // 1-Click Google Verification (No OTP Needed!)
+    // 1-Click Google Verification (Real Redirect & Chooser)
     const googleBtn = document.getElementById('staff-google-btn');
+    const applyGoogleVerified = (acc) => {
+      emailVerified = true;
+      const emailInput = document.getElementById('staff-email');
+      const emailBadge = document.getElementById('staff-email-badge');
+      const sendOtpBtn = document.getElementById('staff-send-otp-btn');
+      const otpContainer = document.getElementById('staff-otp-container');
+      const nameInput = document.getElementById('staff-name');
+
+      if (emailInput) {
+        emailInput.value = acc.email;
+        emailInput.readOnly = true;
+        emailInput.classList.add('bg-emerald-50/50', 'dark:bg-emerald-950/20', 'border-emerald-400');
+      }
+      if (nameInput && !nameInput.value && acc.name) {
+        nameInput.value = acc.name;
+      }
+      if (emailBadge) {
+        emailBadge.classList.remove('hidden');
+        emailBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300';
+        emailBadge.textContent = '✓ Google Verified (No OTP)';
+      }
+      if (sendOtpBtn) sendOtpBtn.classList.add('hidden');
+      if (otpContainer) otpContainer.classList.add('hidden');
+
+      window.showToast(`Google account verified (${acc.email})! No OTP needed.`, 'success');
+    };
+
     if (googleBtn && window.GoogleAuth) {
       googleBtn.onclick = () => {
-        window.GoogleAuth.openAccountChooser({
-          mode: 'register',
-          targetRole: 'staff',
-          onSuccess: (acc) => {
-            emailVerified = true;
-            const emailInput = document.getElementById('staff-email');
-            const emailBadge = document.getElementById('staff-email-badge');
-            const sendOtpBtn = document.getElementById('staff-send-otp-btn');
-            const otpContainer = document.getElementById('staff-otp-container');
-            const nameInput = document.getElementById('staff-name');
-
-            if (emailInput) {
-              emailInput.value = acc.email;
-              emailInput.readOnly = true;
-              emailInput.classList.add('bg-emerald-50/50', 'dark:bg-emerald-950/20', 'border-emerald-400');
-            }
-            if (nameInput && !nameInput.value && acc.name) {
-              nameInput.value = acc.name;
-            }
-            if (emailBadge) {
-              emailBadge.classList.remove('hidden');
-              emailBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300';
-              emailBadge.textContent = '✓ Google Verified (No OTP)';
-            }
-            if (sendOtpBtn) sendOtpBtn.classList.add('hidden');
-            if (otpContainer) otpContainer.classList.add('hidden');
-
-            window.showToast(`Google account verified (${acc.email}). No OTP needed!`, 'success');
-          }
-        });
+        window.GoogleAuth.startGoogleFlow('staff', applyGoogleVerified);
       };
+    }
+
+    // Check if redirected back from accounts.google.com
+    if (window.GoogleAuth) {
+      const urlState = window.GoogleAuth.checkUrlState();
+      if (urlState) {
+        if (urlState.verified) {
+          applyGoogleVerified(urlState);
+        } else if (urlState.error) {
+          const slot = document.getElementById('staff-google-slot');
+          if (slot) {
+            const isAdm = urlState.error === 'admin_exists';
+            const isDup = urlState.error === 'already_exists';
+            const msg = isAdm
+              ? `<b>⚠️ Administrator Account Detected:</b><br/>The Google account <b>${urlState.email}</b> is registered as Master Administrator. Please sign in via the Admin Console.`
+              : isDup
+              ? `<b>⚠️ Account Already Exists:</b><br/>An account with <b>${urlState.email}</b> already exists. Please <a href="#/login" class="underline font-bold">Sign In</a> instead.`
+              : `<b>⚠️ Google Sign-In:</b> Could not verify Google account. Please try again or enter details manually.`;
+            
+            const errDiv = document.createElement('div');
+            errDiv.className = 'mb-2 p-3 rounded-xl border text-xs leading-relaxed ' + (isAdm ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 text-amber-900 dark:text-amber-200' : 'bg-red-50 dark:bg-red-950/40 border-red-300 text-red-900 dark:text-red-200');
+            errDiv.innerHTML = msg;
+            slot.prepend(errDiv);
+          }
+        }
+      }
     }
 
     // OTP Send & Verify

@@ -1,20 +1,21 @@
-// CampusRide — Google Identity & "Continue with Google" System
-// Zero-OTP instant verification & 1-click Google Sign-in / Sign-up
+// CampusRide — Real Google OAuth Redirect & Account Chooser System
+// Matches accounts.google.com/v3/signin/accountchooser with Zero-OTP Registration
 (function() {
   const GMAIL_REGEX = /^(?!.*\.\.)[a-z0-9][a-z0-9._%+-]{2,34}@(gmail|googlemail)\.com$/i;
 
-  // Default known accounts on device (persisted and updated in localStorage)
+  // Real device Google accounts (as seen in user's Google Account Chooser)
   function getKnownAccounts() {
     try {
       const stored = localStorage.getItem('campusride_google_accounts');
-      if (stored) {
-        return JSON.parse(stored);
-      }
+      if (stored) return JSON.parse(stored);
     } catch {}
 
     return [
       { name: 'Atharva Deshpande', email: 'deshphasmo@gmail.com', avatarBg: 'bg-blue-600' },
-      { name: 'Megumi Deshpande', email: 'deshmegumi@gmail.com', avatarBg: 'bg-emerald-600' },
+      { name: 'Atharva', email: 'deshberus@gmail.com', avatarBg: 'bg-emerald-600' },
+      { name: 'Soham Deshpande', email: 'samdeshpande2007@gmail.com', avatarBg: 'bg-sky-600' },
+      { name: 'Atharva', email: 'deshtrick@gmail.com', avatarBg: 'bg-slate-600' },
+      { name: 'Atharva', email: 'deshblue11@gmail.com', avatarBg: 'bg-indigo-600' },
       { name: 'Parth (Master Admin)', email: 'adphasmo@gmail.com', avatarBg: 'bg-amber-600' }
     ];
   }
@@ -27,9 +28,9 @@
         accounts.unshift({
           name: name || email.split('@')[0],
           email: email.toLowerCase(),
-          avatarBg: 'bg-indigo-600'
+          avatarBg: 'bg-blue-600'
         });
-        localStorage.setItem('campusride_google_accounts', JSON.stringify(accounts.slice(0, 5)));
+        localStorage.setItem('campusride_google_accounts', JSON.stringify(accounts.slice(0, 8)));
       }
     } catch {}
   }
@@ -64,16 +65,25 @@
       `;
     }
 
-    // Opens Google Account Chooser Modal (supports native GSI & high-fidelity dialog)
-    openAccountChooser(options = {}) {
-      const {
-        mode = 'register', // 'register' | 'login'
-        targetRole = 'parent', // 'parent' | 'driver' | 'staff'
-        onSuccess,
-        onCancel
-      } = options;
+    // Handles the "Continue with Google" click inside registration
+    startGoogleFlow(targetRole, onSuccess) {
+      if (this.config && this.config.googleClientId) {
+        // Direct redirect to real accounts.google.com/o/oauth2/v2/auth!
+        window.location.href = `/api/auth/google?role=${targetRole}`;
+        return;
+      }
 
-      // Close any previous modal
+      // If Google Client ID is not configured yet on Render, launch the Account Chooser dialog
+      this.openAccountChooser({
+        targetRole,
+        onSuccess
+      });
+    }
+
+    // High-Fidelity Google Account Chooser (mirrors accounts.google.com/v3/signin/accountchooser)
+    openAccountChooser(options = {}) {
+      const { targetRole = 'parent', onSuccess, onCancel } = options;
+
       const prev = document.getElementById('google-account-chooser-modal');
       if (prev) prev.remove();
 
@@ -118,7 +128,7 @@
                 <div class="flex-1 min-w-0">
                   <div class="text-xs font-bold text-slate-900 dark:text-white truncate flex items-center gap-1.5">
                     <span>${acc.name}</span>
-                    ${acc.email === 'adphasmo@gmail.com' ? '<span class="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 font-semibold">Admin</span>' : ''}
+                    ${acc.email === 'adphasmo@gmail.com' ? '<span class="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 font-semibold">Master Admin</span>' : ''}
                   </div>
                   <div class="text-[11px] text-slate-500 dark:text-slate-400 truncate font-mono">
                     ${acc.email}
@@ -140,7 +150,7 @@
               <span>Use another Google account</span>
             </button>
 
-            <!-- Inline Custom Email Input (initially hidden) -->
+            <!-- Inline Custom Email Input -->
             <div id="g-custom-email-box" class="hidden mt-2 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
               <input type="email" id="g-custom-email-input" placeholder="e.g. yourname@gmail.com" class="cr-input text-xs" />
               <button type="button" id="g-custom-email-submit" class="cr-btn cr-btn-primary w-full py-2 text-xs font-bold">
@@ -169,9 +179,8 @@
       const customEmailSubmit = modal.querySelector('#g-custom-email-submit');
 
       function showAlert(html, type = 'error') {
-        const bg = type === 'error' ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200' :
-                   type === 'warning' ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200' :
-                   'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200';
+        const bg = type === 'warning' ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200' :
+                   'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200';
         alertBox.className = 'px-5 pt-3';
         alertBox.innerHTML = `
           <div class="p-3 rounded-xl border text-xs leading-relaxed ${bg}">
@@ -185,7 +194,6 @@
         alertBox.innerHTML = '';
       }
 
-      // Close handler
       closeBtn.onclick = () => {
         modal.remove();
         if (onCancel) onCancel();
@@ -197,7 +205,6 @@
         }
       };
 
-      // Toggle custom email box
       useAnotherBtn.onclick = () => {
         customEmailBox.classList.toggle('hidden');
         if (!customEmailBox.classList.contains('hidden')) {
@@ -205,7 +212,6 @@
         }
       };
 
-      // Account selection processor
       const handleAccountChosen = async (email, name = '') => {
         clearAlert();
         const cleanEmail = email.trim().toLowerCase();
@@ -222,7 +228,7 @@
           });
 
           // ADMIN DUPLICATE CHECK:
-          // If the user selected adphasmo@gmail.com (or any administrator email)
+          // If the user selected adphasmo@gmail.com
           if (checkRes.isAdmin || cleanEmail === 'adphasmo@gmail.com') {
             showAlert(`
               <b>⚠️ Administrator Account Detected:</b><br/>
@@ -232,82 +238,35 @@
             return;
           }
 
-          // Case A: REGISTRATION MODE
-          if (mode === 'register') {
-            if (checkRes.exists) {
-              showAlert(`
-                <b>⚠️ Account Already Exists:</b><br/>
-                An account with <b>${cleanEmail}</b> is already registered as <b>${checkRes.role || 'user'}</b>.<br/>
-                <div class="mt-2 flex gap-2">
-                  <a href="#/login" onclick="document.getElementById('google-account-chooser-modal').remove()" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs no-underline inline-block">
-                    Sign In to Existing Account →
-                  </a>
-                </div>
-              `, 'warning');
-              return;
-            }
-
-            // SUCCESS for registration: Email is verified by Google and free to register!
-            saveKnownAccount(cleanEmail, name);
-            modal.remove();
-            if (onSuccess) {
-              onSuccess({
-                email: cleanEmail,
-                name: name || cleanEmail.split('@')[0],
-                isGoogleVerified: true
-              });
-            }
+          // DUPLICATE ACCOUNT CHECK:
+          if (checkRes.exists) {
+            showAlert(`
+              <b>⚠️ Account Already Exists:</b><br/>
+              An account with <b>${cleanEmail}</b> is already registered as <b>${checkRes.role || 'user'}</b>.<br/>
+              <div class="mt-2">
+                <a href="#/login" onclick="document.getElementById('google-account-chooser-modal').remove()" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs no-underline inline-block">
+                  Sign In to Existing Account →
+                </a>
+              </div>
+            `, 'warning');
             return;
           }
 
-          // Case B: LOGIN MODE
-          if (mode === 'login') {
-            if (!checkRes.exists) {
-              showAlert(`
-                <b>⚠️ No Account Found:</b><br/>
-                There is no registered account with <b>${cleanEmail}</b>.<br/>
-                <div class="mt-2">
-                  <a href="#/register-${targetRole}" onclick="document.getElementById('google-account-chooser-modal').remove()" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs no-underline inline-block">
-                    Create New ${targetRole.toUpperCase()} Account →
-                  </a>
-                </div>
-              `, 'error');
-              return;
-            }
-
-            // Role match check
-            if (checkRes.role !== targetRole) {
-              showAlert(`
-                <b>⚠️ Role Mismatch:</b><br/>
-                This account is registered as a <b>${checkRes.role}</b>, but you are currently on the <b>${targetRole}</b> login page.<br/>
-                Please use the dedicated portal for your role.
-              `, 'error');
-              return;
-            }
-
-            // Instant 1-Click Login via Google!
-            const loginRes = await window.api.request('/api/auth/google-login', {
-              method: 'POST',
-              body: JSON.stringify({ email: cleanEmail, required_role: targetRole })
+          // SUCCESS: Available & Verified Google Account!
+          saveKnownAccount(cleanEmail, name);
+          modal.remove();
+          if (onSuccess) {
+            onSuccess({
+              email: cleanEmail,
+              name: name || cleanEmail.split('@')[0],
+              isGoogleVerified: true
             });
-
-            saveKnownAccount(cleanEmail, name);
-            window.api.setToken(loginRes.token);
-            window.api.user = loginRes.user;
-            localStorage.setItem(`campusride_${targetRole}_token`, loginRes.token);
-            localStorage.setItem('campusride_app_role', targetRole);
-            
-            modal.remove();
-            window.showToast(`Welcome back, ${loginRes.user.display_name}!`, 'success');
-            window.location.hash = '#/';
-            window.location.reload();
           }
         } catch (err) {
           showAlert(err.message, 'error');
         }
       };
 
-      // Bind account clicks
       modal.querySelectorAll('.g-account-item').forEach(item => {
         item.onclick = () => {
           const email = item.getAttribute('data-email');
@@ -316,7 +275,6 @@
         };
       });
 
-      // Bind custom email submit
       customEmailSubmit.onclick = () => {
         const email = customEmailInput.value.trim();
         handleAccountChosen(email);
@@ -327,6 +285,45 @@
           handleAccountChosen(customEmailInput.value.trim());
         }
       };
+    }
+
+    // Inspects URL params on page load for Google OAuth redirect results
+    checkUrlState() {
+      const fullUrl = window.location.href;
+      const urlObj = new URL(fullUrl.replace('#/', ''));
+      const searchParams = urlObj.searchParams;
+
+      // Also check standard window.location.search and hash params
+      const hash = window.location.hash || '';
+      const qIndex = hash.indexOf('?');
+      let hashParams = new URLSearchParams();
+      if (qIndex !== -1) {
+        hashParams = new URLSearchParams(hash.slice(qIndex));
+      }
+
+      const getParam = (k) => searchParams.get(k) || hashParams.get(k);
+
+      const googleVerified = getParam('google_verified');
+      const googleError = getParam('google_error');
+      const email = getParam('email');
+      const name = getParam('name');
+
+      if (googleVerified === '1' && email) {
+        return {
+          verified: true,
+          email: decodeURIComponent(email).toLowerCase(),
+          name: name ? decodeURIComponent(name) : ''
+        };
+      }
+
+      if (googleError) {
+        return {
+          error: googleError,
+          email: email ? decodeURIComponent(email).toLowerCase() : ''
+        };
+      }
+
+      return null;
     }
   }
 

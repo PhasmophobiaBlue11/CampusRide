@@ -27,6 +27,7 @@ try {
     if (cfg.gmail_app_password && !process.env.GMAIL_APP_PASSWORD) process.env.GMAIL_APP_PASSWORD = cfg.gmail_app_password;
     if (cfg.smtp_pass && !process.env.SMTP_PASS) process.env.SMTP_PASS = cfg.smtp_pass;
     if (cfg.google_client_id && !process.env.GOOGLE_CLIENT_ID) process.env.GOOGLE_CLIENT_ID = cfg.google_client_id;
+    if (cfg.google_client_secret && !process.env.GOOGLE_CLIENT_SECRET) process.env.GOOGLE_CLIENT_SECRET = cfg.google_client_secret;
   }
 } catch (e) {}
 
@@ -687,6 +688,129 @@ const server = http.createServer(async (req, res) => {
           emailDelivered: mailResult && mailResult.sent ? true : false,
           message: `A 6-digit verification code has been dispatched to ${cleanEmail}. Please check your Gmail inbox and spam folder.`
         });
+      }
+
+      // AUTH: Google Real Redirect Flow (accounts.google.com/v3/signin/accountchooser)
+      if (pathname === '/api/auth/google' && req.method === 'GET') {
+        const role = urlObj.searchParams.get('role') || 'parent';
+        const clientId = (process.env.GOOGLE_CLIENT_ID || '').trim();
+        
+        const host = req.headers['x-forwarded-host'] || req.headers.host || 'campusride-1-nt84.onrender.com';
+        const proto = req.headers['x-forwarded-proto'] || (host.includes('localhost') ? 'http' : 'https');
+        const redirectUri = `${proto}://${host}/api/auth/google/callback`;
+
+        const targetPage = role === 'driver' ? 'register-driver' : role === 'staff' ? 'register-staff' : 'register-parent';
+
+        if (!clientId) {
+          res.writeHead(302, { Location: `/#/${targetPage}?google_error=no_client_id` });
+          return res.end();
+        }
+
+        const stateObj = { role, host, proto, ts: Date.now() };
+        const state = Buffer.from(JSON.stringify(stateObj)).toString('base64');
+
+        // Real Google Account Chooser URL
+        const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+          `client_id=${encodeURIComponent(clientId)}&` +
+          `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+          `response_type=code&` +
+          `scope=openid%20email%20profile&` +
+          `prompt=select_account&` +
+          `state=${encodeURIComponent(state)}`;
+
+        res.writeHead(302, { Location: googleAuthUrl });
+        return res.end();
+      }
+
+      // AUTH: Google Real Redirect Callback
+      if (pathname === '/api/auth/google/callback' && req.method === 'GET') {
+        const code = urlObj.searchParams.get('code');
+        const stateRaw = urlObj.searchParams.get('state');
+        const errParam = urlObj.searchParams.get('error');
+
+        let role = 'parent';
+        try {
+          if (stateRaw) {
+            const parsed = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8'));
+            if (parsed.role) role = parsed.role;
+          }
+        } catch {}
+
+        const targetPage = role === 'driver' ? 'register-driver' : role === 'staff' ? 'register-staff' : 'register-parent';
+
+        if (errParam || !code) {
+          res.writeHead(302, { Location: `/#/${targetPage}?google_error=cancelled` });
+          return res.end();
+        }
+
+        const clientId = (process.env.GOOGLE_CLIENT_ID || '').trim();
+        const clientSecret = (process.env.GOOGLE_CLIENT_SECRET || '').trim();
+        const host = req.headers['x-forwarded-host'] || req.headers.host || 'campusride-1-nt84.onrender.com';
+        const proto = req.headers['x-forwarded-proto'] || (host.includes('localhost') ? 'http' : 'https');
+        const redirectUri = `${proto}://${host}/api/auth/google/callback`;
+
+        try {
+          const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              code,
+              client_id: clientId,
+              client_secret: clientSecret,
+              redirect_uri: redirectUri,
+              grant_type: 'authorization_code'
+            })
+          });
+
+          const tokenData = await tokenRes.json();
+          let googleEmail = '';
+          let googleName = '';
+
+          if (tokenData.id_token) {
+            const parts = tokenData.id_token.split('.');
+            if (parts.length >= 2) {
+              const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+              googleEmail = (payload.email || '').toLowerCase().trim();
+              googleName = payload.name || '';
+            }
+          }
+
+          if (!googleEmail && tokenData.access_token) {
+            const uiRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: `Bearer ${tokenData.access_token}` }
+            });
+            const ui = await uiRes.json();
+            googleEmail = (ui.email || '').toLowerCase().trim();
+            googleName = ui.name || '';
+          }
+
+          if (!googleEmail) {
+            res.writeHead(302, { Location: `/#/${targetPage}?google_error=no_email` });
+            return res.end();
+          }
+
+          // 1. Check if chosen email is Master Administrator
+          if (googleEmail === PERMANENT_ADMIN_EMAIL.toLowerCase()) {
+            res.writeHead(302, { Location: `/#/${targetPage}?google_error=admin_exists&email=${encodeURIComponent(googleEmail)}` });
+            return res.end();
+          }
+
+          // 2. Check if chosen email already exists in users database
+          const existing = db.prepare('SELECT id, role FROM users WHERE lower(email) = lower(?)').get(googleEmail);
+          if (existing) {
+            res.writeHead(302, { Location: `/#/${targetPage}?google_error=already_exists&email=${encodeURIComponent(googleEmail)}` });
+            return res.end();
+          }
+
+          // 3. New available account: verified by Google!
+          res.writeHead(302, { Location: `/#/${targetPage}?google_verified=1&email=${encodeURIComponent(googleEmail)}&name=${encodeURIComponent(googleName)}` });
+          return res.end();
+
+        } catch (err) {
+          console.error('[Google OAuth Callback Error]', err);
+          res.writeHead(302, { Location: `/#/${targetPage}?google_error=failed` });
+          return res.end();
+        }
       }
 
       // AUTH: Verify Email OTP
