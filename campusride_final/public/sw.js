@@ -1,0 +1,22 @@
+// CampusRide — Progressive Web App Service Worker (v2.1)
+// Clean pass-through with cache-clearing
+const CACHE_NAME = 'campusride-v2.1';
+
+self.addEventListener('install', (e) => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.map((k) => caches.delete(k))
+      );
+    }).then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', (e) => {
+  // Always fetch fresh from network
+  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+});

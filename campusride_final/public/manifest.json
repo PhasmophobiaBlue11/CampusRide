@@ -1,0 +1,22 @@
+{
+  "name": "CampusRide — Campus Transit Management",
+  "short_name": "CampusRide",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#1e40af",
+  "description": "Secure campus transportation management, QR pass scanning, and live transit radar.",
+  "icons": [
+    {
+      "src": "/assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
