@@ -70,7 +70,9 @@ class ApiClient {
       const data = isJson ? await res.json() : await res.text();
 
       if (!res.ok) {
-        throw new Error(data && data.error ? data.error : `Request failed with status ${res.status}`);
+        const err = new Error(data && data.error ? data.error : `Request failed with status ${res.status}`);
+        err.status = res.status;
+        throw err;
       }
       return data;
     } catch (err) {
@@ -142,14 +144,24 @@ class ApiClient {
       const res = await this.request('/api/auth/me');
       this.user = res.user;
       return res.user;
-    } catch {
-      this.setToken(null);
-      this.user = null;
+    } catch (err) {
+      // Only clear token if server explicitly rejected it with 401 Unauthorized
+      // NEVER clear on network failure, 502/503/504 Render cold starts, or timeout
+      if (err && err.status === 401) {
+        console.warn('[Auth] Session invalidated by server.');
+        this.setToken(null);
+        this.user = null;
+        return null;
+      }
+      console.warn('[Auth] Server is warming up or connection pending. Retaining session token.');
       return null;
     }
   }
 
-  logout() {
+  async logout() {
+    try {
+      await this.request('/api/auth/logout', { method: 'POST' });
+    } catch {}
     const key = this.getTokenKey();
     localStorage.removeItem(key);
     this.setToken(null);

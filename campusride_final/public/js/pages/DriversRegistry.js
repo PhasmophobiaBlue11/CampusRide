@@ -242,7 +242,7 @@ class DriversRegistryPage {
 
           <div>
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Vehicle License Plate</label>
-            <input type="text" id="new-driver-plate" required minlength="6" class="cr-input uppercase font-mono font-bold tracking-wider" placeholder="MH 31 DC 9633" />
+            <input type="text" id="new-driver-plate" required minlength="6" class="cr-input uppercase font-mono font-bold tracking-wider" placeholder="__ __ __ ____" />
           </div>
 
           <div>
@@ -277,6 +277,11 @@ class DriversRegistryPage {
     `;
 
     document.body.appendChild(modal);
+
+    const plateInput = modal.querySelector('#new-driver-plate');
+    if (plateInput && window.attachPlateFormatter) {
+      window.attachPlateFormatter(plateInput);
+    }
 
     modal.querySelector('#close-add-modal').onclick = () => modal.remove();
 

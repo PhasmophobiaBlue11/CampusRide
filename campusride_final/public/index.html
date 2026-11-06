@@ -92,25 +92,15 @@
 
   <script src="/js/app.js?v=4.0"></script>
 
-  <!-- Auto-Purge Legacy Cache & Service Worker -->
+    <!-- Service Worker Registration for Instant App Shell & Cold-Start Masking -->
   <script>
-    if ('caches' in window) {
-      caches.keys().then((names) => {
-        names.forEach((name) => {
-          if (name.includes('campusride-v1')) {
-            caches.delete(name);
-          }
-        });
-      });
-    }
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then((registrations) => {
-        registrations.forEach((r) => r.unregister());
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch((err) => {
+          console.warn('[SW] Registration failed:', err);
+        });
       });
     }
   </script>
 </body>
 </html>
-
-
-

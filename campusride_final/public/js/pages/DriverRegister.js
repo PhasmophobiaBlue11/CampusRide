@@ -90,7 +90,7 @@ class DriverRegisterPage {
 
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Vehicle License Plate Number</label>
-              <input type="text" id="driver-van-no" required minlength="6" class="cr-input uppercase tracking-wider font-mono font-bold" placeholder="MH 31 DC 9633" />
+              <input type="text" id="driver-van-no" required minlength="6" class="cr-input uppercase tracking-wider font-mono font-bold" placeholder="__ __ __ ____" />
             </div>
 
             <div>
@@ -163,6 +163,12 @@ class DriverRegisterPage {
         passInput.type = isPass ? 'text' : 'password';
         togglePassBtn.textContent = isPass ? '🙈' : '👁️';
       };
+    }
+
+    // Attach auto-spacing plate formatter
+    const vanNoInput = document.getElementById('driver-van-no');
+    if (vanNoInput && window.attachPlateFormatter) {
+      window.attachPlateFormatter(vanNoInput);
     }
 
     const form = document.getElementById('driver-reg-form');

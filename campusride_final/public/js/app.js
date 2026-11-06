@@ -91,8 +91,31 @@
       return;
     }
 
-    // Check Authentication
-    const user = await window.api.fetchMe();
+    // Check Authentication with Warmup Resilience
+    let user = null;
+    const token = window.api.getToken();
+    if (token) {
+      user = await window.api.fetchMe();
+      // If token still exists but user is null, server is cold booting (Render free tier wake-up)
+      if (!user && window.api.getToken()) {
+        appEl.innerHTML = `
+          <div class="min-h-screen flex flex-col items-center justify-center p-6 text-center space-y-4">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-700 to-indigo-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/25 animate-pulse text-3xl">
+              🚌
+            </div>
+            <div class="space-y-1">
+              <h3 class="font-bold text-slate-900 dark:text-white text-base">Connecting to CampusRide Cloud...</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Restoring your transit session. Please hold on...</p>
+            </div>
+            <div class="w-36 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+              <div class="h-full bg-blue-600 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+        `;
+        setTimeout(route, 2000);
+        return;
+      }
+    }
 
     // If Unauthenticated: Render ONLY that app's dedicated login (NO tabs)
     if (!user) {

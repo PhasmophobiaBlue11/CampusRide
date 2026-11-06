@@ -79,7 +79,7 @@ Staff, Drivers, and Parents can register their own accounts directly on the resp
 ### 2. Registration Scanner (`/registration-scanner`)
 - Scans plain-text vehicle/staff QRs formatted like:
   ```text
-  Name: Ramesh Sharma, Vehicle: MH 31 DC 9633, Type: 4_wheeler, Phone: 9876522222
+  Name: Ramesh Sharma, Vehicle: MH 12 AB 1234, Type: 4_wheeler, Phone: 9876522222
   ```
 - Validates required fields and auto-allocates the next sequential label (`Van 1`, `Van 2`... or `Staff 1`, `Staff 2`).
 - Rejects pass QRs to prevent mix-ups.

@@ -92,7 +92,7 @@ class RegistrationScannerPage {
 
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Vehicle License Plate (Number)</label>
-              <input type="text" id="manual-driver-plate" required minlength="6" class="cr-input uppercase font-mono font-bold tracking-wider" placeholder="MH 31 DC 9633" />
+              <input type="text" id="manual-driver-plate" required minlength="6" class="cr-input uppercase font-mono font-bold tracking-wider" placeholder="__ __ __ ____" />
             </div>
 
             <div>
@@ -200,6 +200,11 @@ class RegistrationScannerPage {
     }
 
     // Manual Form Submit
+    const manualPlate = document.getElementById('manual-driver-plate');
+    if (manualPlate && window.attachPlateFormatter) {
+      window.attachPlateFormatter(manualPlate);
+    }
+
     const manualForm = document.getElementById('manual-reg-form');
     if (manualForm) {
       manualForm.onsubmit = async (e) => {

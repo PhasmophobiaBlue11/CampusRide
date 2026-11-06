@@ -50,6 +50,40 @@ class QRUtils {
   }
 }
 
+// License Plate Auto-Spacing & Formatter Utility
+// Format: __ __ __ ____ (e.g. MH 12 AB 1234)
+window.formatLicensePlate = function(val) {
+  if (!val) return '';
+  const raw = String(val).replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10);
+  const parts = [];
+  if (raw.length > 0) parts.push(raw.slice(0, 2));
+  if (raw.length > 2) parts.push(raw.slice(2, 4));
+  if (raw.length > 4) parts.push(raw.slice(4, 6));
+  if (raw.length > 6) parts.push(raw.slice(6, 10));
+  return parts.join(' ');
+};
+
+window.attachPlateFormatter = function(inputEl) {
+  if (!inputEl) return;
+  inputEl.placeholder = '__ __ __ ____';
+  inputEl.setAttribute('autocomplete', 'off');
+  inputEl.setAttribute('autocapitalize', 'characters');
+  inputEl.setAttribute('spellcheck', 'false');
+  inputEl.setAttribute('maxlength', '13'); // 2 + 1 + 2 + 1 + 2 + 1 + 4 = 13 chars
+
+  const update = () => {
+    const oldVal = inputEl.value;
+    const formatted = window.formatLicensePlate(oldVal);
+    if (oldVal !== formatted) {
+      inputEl.value = formatted;
+    }
+  };
+
+  inputEl.addEventListener('input', update);
+  inputEl.addEventListener('paste', () => setTimeout(update, 0));
+  if (inputEl.value) update();
+};
+
 window.QRUtils = QRUtils;
 
 // Global QR Modal Helper for Driver / Staff Pass

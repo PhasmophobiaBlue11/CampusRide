@@ -36,12 +36,12 @@ class LoginPage {
                      isAdmin ? 'bg-purple-700 hover:bg-purple-600 text-white shadow-purple-500/25' :
                      'cr-btn-primary shadow-blue-500/25';
 
-    const usernamePlaceholder = isDriver ? 'e.g. Driver Ramesh' :
-                                isParent ? 'e.g. ParentXYZ' :
+    const usernamePlaceholder = isDriver ? 'Enter driver username' :
+                                isParent ? 'Enter parent username' :
                                 isAdmin ? 'Admin2026' :
-                                'e.g. StaffSharma';
+                                'Enter staff username';
 
-    const savedUsername = isAdmin ? 'Admin2026' : (localStorage.getItem(`campusride_device_${role}_username`) || '');
+    const savedUsername = '';
 
     const registrationCta = isDriver ? `
       <div class="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-900/50 text-xs">
@@ -84,7 +84,7 @@ class LoginPage {
             <input type="hidden" id="login-target-role" value="${role}" />
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Username</label>
-              <input type="text" id="login-username" required class="cr-input" placeholder="${usernamePlaceholder}" value="${savedUsername}" autocomplete="username" />
+              <input type="text" id="login-username" required class="cr-input" placeholder="${usernamePlaceholder}" value="" autocomplete="off" spellcheck="false" />
             </div>
 
             <div>

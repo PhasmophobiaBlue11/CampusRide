@@ -1,6 +1,7 @@
 // CampusRide — High-Performance Node.js Server
 // Zero-dependency SQLite backend with Real-Time SSE, Username Authentication, QR Validation, and Safety Auditing
 const http = require('node:http');
+const https = require('node:https');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -226,6 +227,15 @@ function initDatabase() {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      last_active INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+
+
   `);
 
   // Ensure username column exists
@@ -278,28 +288,60 @@ function broadcastEvent(type, payload) {
   }
 }
 
-// In-memory token storage (token -> userId)
+// Hybrid token storage: RAM Map cache + Persistent SQLite table
+// Survived Render spin-downs, restarts & container reboots
 const activeSessions = new Map();
 
 function createToken(userId) {
   const token = 'cr_' + crypto.randomBytes(24).toString('hex');
-  activeSessions.set(token, { userId, created: Date.now() });
+  const now = Date.now();
+  activeSessions.set(token, { userId, created: now, last_active: now });
+  try {
+    db.prepare('INSERT OR REPLACE INTO sessions (token, user_id, created_at, last_active) VALUES (?, ?, ?, ?)').run(token, userId, now, now);
+  } catch (err) {
+    console.error('[Session] SQLite insert error:', err.message);
+  }
   return token;
 }
 
+function deleteSession(token) {
+  if (!token) return;
+  activeSessions.delete(token);
+  try {
+    db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+  } catch (err) {
+    console.error('[Session] SQLite delete error:', err.message);
+  }
+}
+
 function getUserIdFromReq(req) {
+  let token = null;
   const authHeader = req.headers['authorization'];
   if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    const session = activeSessions.get(token);
-    if (session) return session.userId;
+    token = authHeader.slice(7).trim();
   }
-  // Also check query param ?token=
-  const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const qToken = urlObj.searchParams.get('token');
-  if (qToken) {
-    const session = activeSessions.get(qToken);
-    if (session) return session.userId;
+  if (!token) {
+    const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    token = urlObj.searchParams.get('token');
+  }
+  if (!token) return null;
+
+  // 1. Check in-memory RAM cache first (instant)
+  const cached = activeSessions.get(token);
+  if (cached) return cached.userId;
+
+  // 2. Query persistent SQLite sessions table (survives container spin-downs)
+  try {
+    const row = db.prepare('SELECT user_id, created_at, last_active FROM sessions WHERE token = ?').get(token);
+    if (row) {
+      activeSessions.set(token, { userId: row.user_id, created: row.created_at, last_active: Date.now() });
+      try {
+        db.prepare('UPDATE sessions SET last_active = ? WHERE token = ?').run(Date.now(), token);
+      } catch {}
+      return row.user_id;
+    }
+  } catch (err) {
+    console.error('[Session] SQLite lookup error:', err.message);
   }
   return null;
 }
@@ -501,6 +543,25 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, {
           permanentAdminUsername: PERMANENT_ADMIN_USERNAME
         });
+      }
+
+      // HEALTH CHECK & KEEP-ALIVE (Zero-payload instant response for uptime pings)
+      if (pathname === '/api/health' && req.method === 'GET') {
+        return sendJson(res, 200, {
+          status: 'ok',
+          service: 'CampusRide',
+          uptime: Math.floor(process.uptime()),
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // AUTH: Logout (removes persistent token from SQLite & RAM)
+      if (pathname === '/api/auth/logout' && req.method === 'POST') {
+        const authHeader = req.headers['authorization'];
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          deleteSession(authHeader.slice(7).trim());
+        }
+        return sendJson(res, 200, { success: true });
       }
 
       // AUTH: Check if a Username exists (for availability & device check)
@@ -946,7 +1007,7 @@ const server = http.createServer(async (req, res) => {
         }
 
         // Parse key-value or delimited pairs
-        // Accepts formats: "Name: Ramesh, Vehicle: MH31DC9633, Phone: 9876543210" or "Name-..., vehicle no-..."
+        // Accepts formats: "Name: Ramesh, Vehicle: MH12AB1234, Phone: 9876543210" or "Name-..., vehicle no-..."
         const lines = text.split(/[\n,;]+/);
         const parsed = {};
         for (const line of lines) {
@@ -1406,4 +1467,18 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`  Realtime Events:  SSE Active (/api/events)`);
   console.log(`  Database:         SQLite (${DB_PATH})`);
   console.log(`=======================================================`);
+
+  // Render Anti-Sleep Keep-Alive: Automatically pings /api/health every 9 minutes
+  const pingTarget = process.env.RENDER_EXTERNAL_URL || 'https://campusride-1-nt84.onrender.com';
+  if (pingTarget) {
+    const httpLib = pingTarget.startsWith('https') ? https : http;
+    setInterval(() => {
+      try {
+        httpLib.get(`${pingTarget}/api/health`, (res) => {
+          // Warm ping succeeded
+        }).on('error', () => {});
+      } catch {}
+    }, 9 * 60 * 1000);
+    console.log(`  Keep-Alive:       Auto-pinger active for ${pingTarget}`);
+  }
 });
