@@ -9,6 +9,12 @@
     document.documentElement.classList.add('dark');
   }
 
+  // Purge legacy device keys set erroneously during login in previous versions
+  try {
+    localStorage.removeItem('campusride_device_parent_username');
+    localStorage.removeItem('campusride_device_driver_username');
+    localStorage.removeItem('campusride_device_staff_username');
+  } catch {}
 
   const appEl = document.getElementById('app');
 

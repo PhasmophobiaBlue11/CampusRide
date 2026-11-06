@@ -146,9 +146,6 @@ class LoginPage {
           
           // Remember role in session
           localStorage.setItem('campusride_app_role', targetRole);
-          if (targetRole && targetRole !== 'admin') {
-            localStorage.setItem(`campusride_device_${targetRole}_username`, username);
-          }
 
           // Redirect to root of this app
           window.location.hash = '#/';

@@ -2,9 +2,9 @@
 // Pure Username + Password Authentication with 1-Account-Per-Device Enforcement
 class StaffRegisterPage {
   static render() {
-    const existingDeviceUser = localStorage.getItem('campusride_device_staff_username');
+    const existingDeviceUser = localStorage.getItem('campusride_account_created_staff');
 
-    // DEVICE LOCK SCREEN: If a Staff account already exists on this device
+    // DEVICE LOCK SCREEN: Only if a Staff account was actually CREATED from this device
     if (existingDeviceUser) {
       return `
         <div class="min-h-screen flex items-center justify-center p-4 relative z-10">
@@ -98,7 +98,7 @@ class StaffRegisterPage {
   }
 
   static attachEvents() {
-    const existingDeviceUser = localStorage.getItem('campusride_device_staff_username');
+    const existingDeviceUser = localStorage.getItem('campusride_account_created_staff');
 
     // DEVICE LOCK SCREEN HANDLERS
     if (existingDeviceUser) {
@@ -124,6 +124,7 @@ class StaffRegisterPage {
               body: JSON.stringify({ username: existingDeviceUser, role: 'staff' })
             });
 
+            localStorage.removeItem('campusride_account_created_staff');
             localStorage.removeItem('campusride_device_staff_username');
             localStorage.removeItem('campusride_staff_token');
             window.showToast(`Staff account "@${existingDeviceUser}" deleted. You can now register a new staff account.`, 'success');
@@ -175,8 +176,8 @@ class StaffRegisterPage {
             body: JSON.stringify({ fullName, username, phone, password })
           });
 
-          // Save device lock and token
-          localStorage.setItem('campusride_device_staff_username', username);
+          // Save device creation lock and token
+          localStorage.setItem('campusride_account_created_staff', username);
           localStorage.setItem('campusride_staff_token', res.token);
           localStorage.setItem('campusride_app_role', 'staff');
           window.api.setToken(res.token);

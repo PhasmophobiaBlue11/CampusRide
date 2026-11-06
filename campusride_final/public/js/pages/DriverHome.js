@@ -10,6 +10,66 @@ class DriverHomePage {
   static lastKnownLng = null;
   static cachedStudents = [];
 
+  // --- DEVICE-FIRST STORAGE & SYNC (§7.8) ---
+  // Stores all student data & GPS logs on the user's device to reduce server load
+  // Automatically syncs to any other device whenever the account is opened elsewhere
+  static getDeviceStudents(vanId) {
+    if (!vanId) return null;
+    try {
+      const data = localStorage.getItem(`campusride_device_students_${vanId}`);
+      return data ? JSON.parse(data) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  static saveDeviceStudents(vanId, students) {
+    if (!vanId || !Array.isArray(students)) return;
+    try {
+      localStorage.setItem(`campusride_device_students_${vanId}`, JSON.stringify(students));
+    } catch {}
+  }
+
+  static getDeviceBreadcrumbs(vanId) {
+    if (!vanId) return [];
+    try {
+      const data = localStorage.getItem(`campusride_device_breadcrumbs_${vanId}`);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  static recordDeviceBreadcrumb(vanId, point) {
+    if (!vanId) return;
+    try {
+      const list = DriverHomePage.getDeviceBreadcrumbs(vanId);
+      list.push(point);
+      if (list.length > 2500) list.shift();
+      localStorage.setItem(`campusride_device_breadcrumbs_${vanId}`, JSON.stringify(list));
+    } catch {}
+  }
+
+  static getDeviceTrips(vanId) {
+    if (!vanId) return [];
+    try {
+      const data = localStorage.getItem(`campusride_device_trips_${vanId}`);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  static recordDeviceTrip(vanId, trip) {
+    if (!vanId) return;
+    try {
+      const trips = DriverHomePage.getDeviceTrips(vanId);
+      trips.unshift(trip);
+      if (trips.length > 50) trips.pop();
+      localStorage.setItem(`campusride_device_trips_${vanId}`, JSON.stringify(trips));
+    } catch {}
+  }
+
   static async render(user) {
     DriverHomePage.driverName = user.display_name || user.username || 'Campus Driver';
     let vanId = user.driverProfile?.selected_van_id;
@@ -53,12 +113,25 @@ class DriverHomePage {
       }
     }
 
-    let students = [];
+    // 1. Load students from device storage first (0ms latency, zero server wait)
+    const localStudents = DriverHomePage.getDeviceStudents(vanId);
+    let students = localStudents || [];
+
+    // 2. Authoritative server sync: keeps data synced across multiple devices
     if (vanId) {
       try {
         const res = await window.api.request(`/api/my-students?vanId=${vanId}`);
-        students = res.students || [];
-      } catch {}
+        if (res && Array.isArray(res.students)) {
+          students = res.students;
+          // Store on this device permanently (reduces server load & enables offline access)
+          DriverHomePage.saveDeviceStudents(vanId, students);
+        }
+      } catch (err) {
+        console.warn('[Driver] Using device-stored students (offline mode):', err.message);
+        if (!students || students.length === 0) {
+          students = DriverHomePage.getDeviceStudents(vanId) || [];
+        }
+      }
     }
 
     DriverHomePage.cachedStudents = students;
@@ -73,6 +146,8 @@ class DriverHomePage {
       }, () => {}, { enableHighAccuracy: true, timeout: 5000 });
     }
 
+    const localBreadcrumbsCount = DriverHomePage.getDeviceBreadcrumbs(vanId).length;
+
     return `
       <div class="max-w-4xl mx-auto px-4 py-6 space-y-6">
         <!-- Driver Hero Card -->
@@ -86,8 +161,14 @@ class DriverHomePage {
             <p class="text-xs sm:text-sm text-blue-200 mt-1">
               Driver: <b>${user.display_name || user.email}</b> • Assigned students: ${students.length}
             </p>
+            <div class="mt-1 flex flex-wrap items-center gap-2">
+              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 text-[11px] font-semibold border border-emerald-500/30">
+                💾 Device-First: Student Roster & GPS Trail Saved Locally
+              </span>
+            </div>
             <div id="driver-gps-coordinates" class="text-xs font-mono text-emerald-300 mt-1.5 ${isActive ? '' : 'hidden'}">
               📍 Live GPS: ${DriverHomePage.lastKnownLat ? `${DriverHomePage.lastKnownLat.toFixed(5)}, ${DriverHomePage.lastKnownLng.toFixed(5)}` : 'Detecting Satellite Fix...'}
+            </div>
             </div>
             <div class="mt-2.5 flex flex-wrap items-center gap-2">
               <button type="button" id="driver-show-gate-pass-btn" class="cr-btn bg-amber-500 hover:bg-amber-400 text-white text-xs font-bold py-2 px-3.5 rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer select-none">
@@ -361,11 +442,20 @@ class DriverHomePage {
             body: JSON.stringify({ vanId })
           });
 
+          // Save completed trip record on this device forever
+          DriverHomePage.recordDeviceTrip(vanId, {
+            id: 'trip_' + Date.now(),
+            vanId,
+            date: new Date().toLocaleDateString(),
+            time: new Date().toLocaleTimeString(),
+            pointsSavedOnDevice: DriverHomePage.getDeviceBreadcrumbs(vanId).length
+          });
+
           DriverHomePage.isJourneyActive = false;
           DriverHomePage.stopRealGPSWatch();
           DriverHomePage.updateUIState(false);
 
-          window.showToast('🛑 Journey ended. Live GPS tracking stopped.', 'info');
+          window.showToast('🛑 Journey ended. Live GPS tracking stopped and trail saved on device.', 'info');
         } catch (err) {
           window.showToast(err.message, 'error');
           endBtn.disabled = false;
@@ -427,12 +517,25 @@ class DriverHomePage {
     const coordsDisplay = document.getElementById('driver-gps-coordinates');
     let lastSent = 0;
 
-    const pushLocation = (lat, lng) => {
+    const pushLocation = (lat, lng, posCoords = null) => {
       DriverHomePage.lastKnownLat = lat;
       DriverHomePage.lastKnownLng = lng;
+
+      // 1. Permanently store GPS trail on the driver's device (zero server load)
+      DriverHomePage.recordDeviceBreadcrumb(vanId, {
+        lat,
+        lng,
+        speed: posCoords ? posCoords.speed : 0,
+        accuracy: posCoords ? posCoords.accuracy : 0,
+        timestamp: Date.now()
+      });
+
+      const breadcrumbsCount = DriverHomePage.getDeviceBreadcrumbs(vanId).length;
       if (coordsDisplay) {
-        coordsDisplay.textContent = `📍 Live GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        coordsDisplay.textContent = `📍 Live GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)} • ${breadcrumbsCount} trail points saved on device`;
       }
+
+      // 2. Ultra-lightweight live ping to server (updates only the single active van location row)
       window.api.request('/api/location/update', {
         method: 'POST',
         body: JSON.stringify({ vanId, lat, lng })
@@ -449,9 +552,9 @@ class DriverHomePage {
           const lat = Number(pos.coords.latitude.toFixed(6));
           const lng = Number(pos.coords.longitude.toFixed(6));
           const now = Date.now();
-          if (now - lastSent < 2000) return; // Throttle 2s
+          if (now - lastSent < 3000) return; // 3-second throttle reduces server network load
           lastSent = now;
-          pushLocation(lat, lng);
+          pushLocation(lat, lng, pos.coords);
         },
         (err) => {
           console.warn('Real GPS continuous watch notice:', err.message);

@@ -2,9 +2,9 @@
 // Pure Username + Password Authentication with 1-Account-Per-Device Enforcement
 class DriverRegisterPage {
   static render() {
-    const existingDeviceUser = localStorage.getItem('campusride_device_driver_username');
+    const existingDeviceUser = localStorage.getItem('campusride_account_created_driver');
 
-    // DEVICE LOCK SCREEN: If a Driver account already exists on this device
+    // DEVICE LOCK SCREEN: Only if a Driver account was actually CREATED from this device
     if (existingDeviceUser) {
       return `
         <div class="min-h-screen flex items-center justify-center p-4 relative z-10">
@@ -111,7 +111,7 @@ class DriverRegisterPage {
   }
 
   static attachEvents() {
-    const existingDeviceUser = localStorage.getItem('campusride_device_driver_username');
+    const existingDeviceUser = localStorage.getItem('campusride_account_created_driver');
 
     // DEVICE LOCK SCREEN HANDLERS
     if (existingDeviceUser) {
@@ -137,6 +137,7 @@ class DriverRegisterPage {
               body: JSON.stringify({ username: existingDeviceUser, role: 'driver' })
             });
 
+            localStorage.removeItem('campusride_account_created_driver');
             localStorage.removeItem('campusride_device_driver_username');
             localStorage.removeItem('campusride_driver_token');
             window.showToast(`Driver account "@${existingDeviceUser}" deleted. You can now register a new driver.`, 'success');
@@ -196,8 +197,8 @@ class DriverRegisterPage {
             body: JSON.stringify({ fullName, username, phone, password, vehicleNo, vehicleType })
           });
 
-          // Save device lock and token
-          localStorage.setItem('campusride_device_driver_username', username);
+          // Save device creation lock and token
+          localStorage.setItem('campusride_account_created_driver', username);
           localStorage.setItem('campusride_driver_token', res.token);
           localStorage.setItem('campusride_app_role', 'driver');
           window.api.setToken(res.token);

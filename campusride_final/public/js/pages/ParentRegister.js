@@ -10,9 +10,9 @@ class ParentRegisterPage {
     ParentRegisterPage.detectedLng = 79.0601;
     ParentRegisterPage.isLocationAcquired = false;
 
-    const existingDeviceUser = localStorage.getItem('campusride_device_parent_username');
+    const existingDeviceUser = localStorage.getItem('campusride_account_created_parent');
 
-    // DEVICE LOCK SCREEN: If an account already exists on this device
+    // DEVICE LOCK SCREEN: Only if an account was actually CREATED from this device
     if (existingDeviceUser) {
       return `
         <div class="min-h-screen flex items-center justify-center p-4 relative z-10">
@@ -140,7 +140,7 @@ class ParentRegisterPage {
   }
 
   static attachEvents() {
-    const existingDeviceUser = localStorage.getItem('campusride_device_parent_username');
+    const existingDeviceUser = localStorage.getItem('campusride_account_created_parent');
 
     // DEVICE LOCK SCREEN HANDLERS
     if (existingDeviceUser) {
@@ -166,6 +166,7 @@ class ParentRegisterPage {
               body: JSON.stringify({ username: existingDeviceUser, role: 'parent' })
             });
 
+            localStorage.removeItem('campusride_account_created_parent');
             localStorage.removeItem('campusride_device_parent_username');
             localStorage.removeItem('campusride_parent_token');
             window.showToast(`Account "@${existingDeviceUser}" deleted. You can now register a new account.`, 'success');
@@ -242,8 +243,8 @@ class ParentRegisterPage {
             })
           });
 
-          // Save device lock and token
-          localStorage.setItem('campusride_device_parent_username', username);
+          // Save device creation lock and token
+          localStorage.setItem('campusride_account_created_parent', username);
           localStorage.setItem('campusride_parent_token', res.token);
           localStorage.setItem('campusride_app_role', 'parent');
           window.api.setToken(res.token);
