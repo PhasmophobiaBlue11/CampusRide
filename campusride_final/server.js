@@ -26,6 +26,73 @@ function ensurePermanentAdmin() {
     db.prepare('DELETE FROM users WHERE lower(email) = ? OR lower(username) = ?').run('adphasmo@gmail.com', 'adphasmo@gmail.com');
   } catch (e) {}
 
+  // Remove all previous legacy email/account-based drivers, parents, and staff
+  try {
+    const legacyUsers = db.prepare(`
+      SELECT id, role, email FROM users 
+      WHERE id != 'usr_perm_admin' 
+        AND (username IS NULL OR username = '' OR username LIKE '%@%' OR email LIKE '%@%')
+        AND lower(coalesce(username, '')) != lower(?)
+        AND lower(coalesce(email, '')) != lower(?)
+    `).all(PERMANENT_ADMIN_USERNAME, PERMANENT_ADMIN_USERNAME);
+
+    for (const u of legacyUsers) {
+      // Driver cleanup
+      const dp = db.prepare('SELECT selected_van_id FROM driver_profiles WHERE user_id = ?').get(u.id);
+      if (dp && dp.selected_van_id) {
+        db.prepare('DELETE FROM drivers WHERE id = ?').run(dp.selected_van_id);
+        db.prepare('DELETE FROM van_locations WHERE van_id = ?').run(dp.selected_van_id);
+        db.prepare('DELETE FROM van_logs WHERE driver_id = ?').run(dp.selected_van_id);
+        db.prepare('DELETE FROM ride_alerts WHERE van_id = ?').run(dp.selected_van_id);
+        db.prepare('DELETE FROM children WHERE van_id = ?').run(dp.selected_van_id);
+      }
+      db.prepare('DELETE FROM driver_profiles WHERE user_id = ?').run(u.id);
+
+      // Parent cleanup
+      db.prepare('DELETE FROM children WHERE parent_id = ?').run(u.id);
+      db.prepare('DELETE FROM parents WHERE user_id = ?').run(u.id);
+      db.prepare('DELETE FROM parent_notifications WHERE parent_id = ?').run(u.id);
+
+      // Staff cleanup
+      db.prepare('DELETE FROM staff_requests WHERE user_id = ? OR email = ?').run(u.id, u.email);
+
+      // Delete user
+      db.prepare('DELETE FROM users WHERE id = ?').run(u.id);
+      console.log(`[CampusRide] Purged legacy account-based user: id="${u.id}", email="${u.email}"`);
+    }
+
+    // Also clean up any orphaned driver records not associated with an active username-based driver profile
+    const orphanedDrivers = db.prepare(`
+      SELECT id FROM drivers 
+      WHERE id NOT IN (
+        SELECT dp.selected_van_id FROM driver_profiles dp 
+        JOIN users u ON dp.user_id = u.id 
+        WHERE u.username IS NOT NULL AND u.username != '' AND u.username NOT LIKE '%@%'
+      )
+    `).all();
+
+    for (const od of orphanedDrivers) {
+      db.prepare('DELETE FROM van_locations WHERE van_id = ?').run(od.id);
+      db.prepare('DELETE FROM van_logs WHERE driver_id = ?').run(od.id);
+      db.prepare('DELETE FROM ride_alerts WHERE van_id = ?').run(od.id);
+      db.prepare('DELETE FROM children WHERE van_id = ?').run(od.id);
+      db.prepare('DELETE FROM drivers WHERE id = ?').run(od.id);
+      console.log(`[CampusRide] Purged orphaned driver record: id="${od.id}"`);
+    }
+
+    // Also remove any orphaned staff requests not tied to a valid username-based user
+    db.prepare(`
+      DELETE FROM staff_requests 
+      WHERE user_id NOT IN (
+        SELECT id FROM users 
+        WHERE username IS NOT NULL AND username != '' AND username NOT LIKE '%@%'
+      )
+    `).run();
+
+  } catch (err) {
+    console.warn('[CampusRide] Notice while purging legacy account-based records:', err.message);
+  }
+
   const existing = db.prepare('SELECT id FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)').get(PERMANENT_ADMIN_USERNAME, PERMANENT_ADMIN_USERNAME);
   if (!existing) {
     db.prepare(`
