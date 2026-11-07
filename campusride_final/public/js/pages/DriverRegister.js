@@ -168,17 +168,23 @@ class DriverRegisterPage {
       };
     }
 
-    // Auto-spacing Indian License Plate Formatter
+    // Auto-spacing Indian License Plate Formatter (Supports mobile virtual keyboards)
     const vanNoInput = document.getElementById('driver-van-no');
     if (vanNoInput) {
+      let prevVal = '';
       let isBackspacing = false;
       vanNoInput.addEventListener('keydown', (e) => {
         isBackspacing = e.key === 'Backspace' || e.key === 'Delete';
       });
 
       vanNoInput.addEventListener('input', () => {
-        if (isBackspacing) return;
-        let raw = vanNoInput.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+        const curVal = vanNoInput.value;
+        if (isBackspacing || curVal.length < prevVal.length) {
+          prevVal = curVal;
+          return;
+        }
+
+        let raw = curVal.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
         if (raw.length > 10) raw = raw.slice(0, 10);
 
         let formatted = '';
@@ -202,6 +208,7 @@ class DriverRegisterPage {
           }
         }
         vanNoInput.value = formatted.trim();
+        prevVal = vanNoInput.value;
       });
     }
 

@@ -23,6 +23,7 @@ class StaffHomePage {
     let stats = { entry: 0, exit: 0 };
     let driverCount = 0;
     let parentCount = 0;
+    let staffCount = 0;
 
     // 1. Instant Device-First Load from phone storage
     const localData = StaffHomePage.getDeviceStaffData(user.id);
@@ -31,6 +32,7 @@ class StaffHomePage {
       stats = localData.stats || { entry: 0, exit: 0 };
       driverCount = localData.driverCount || 0;
       parentCount = localData.parentCount || 0;
+      staffCount = localData.staffCount || 0;
     }
 
     try {
@@ -42,11 +44,13 @@ class StaffHomePage {
       ]);
       logs = logsRes.logs || [];
       stats = logsRes.stats || { entry: 0, exit: 0 };
-      driverCount = (dRes.drivers || []).length;
+      const allDrivers = dRes.drivers || [];
+      driverCount = allDrivers.filter(d => d.type === 'van').length;
+      staffCount = allDrivers.filter(d => d.type === 'staff').length;
       parentCount = (pRes.parents || []).length;
 
       // Save to this device's storage permanently
-      StaffHomePage.saveDeviceStaffData(user.id, { logs, stats, driverCount, parentCount });
+      StaffHomePage.saveDeviceStaffData(user.id, { logs, stats, driverCount, parentCount, staffCount });
     } catch {
       // Offline fallback: already loaded from phone's local storage
     }
@@ -89,11 +93,11 @@ class StaffHomePage {
           </div>
         </div>
 
-        <!-- COMBINED SINGLE OPTION: Parents & Drivers Accounts Directory -->
+        <!-- 3-WAY DIRECTORY CARD: Parents, Drivers, and Staff -->
         <div class="space-y-3">
           <div class="flex items-center justify-between">
-            <h2 class="text-base font-black text-slate-900 dark:text-white">Registered Accounts Directory</h2>
-            <span class="text-xs text-slate-400">Gate registry view</span>
+            <h2 class="text-base font-black text-slate-900 dark:text-white">Campus Directory</h2>
+            <span class="text-xs text-slate-400">Registry directory view</span>
           </div>
 
           <a href="#/directories" class="cr-card p-5 no-underline text-inherit border-2 border-transparent hover:border-indigo-500 transition group flex items-center justify-between shadow-sm hover:shadow-md">
@@ -103,20 +107,23 @@ class StaffHomePage {
               </div>
               <div>
                 <div class="flex items-center gap-2">
-                  <h3 class="font-bold text-base text-slate-900 dark:text-white">Parent / Driver Accounts Directory</h3>
+                  <h3 class="font-bold text-base text-slate-900 dark:text-white">Campus Directory</h3>
                   <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300">
-                    ${driverCount + parentCount} Total
+                    ${driverCount + parentCount + staffCount} Total
                   </span>
                 </div>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Tap to view all registered Parent accounts and Driver vehicle passes. Toggle between them inside.
+                  Browse registered Parents, transport Drivers, and personally added Staff passes.
                 </p>
                 <div class="flex items-center gap-3 mt-2 text-xs font-semibold">
+                  <span class="text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                    <span>👨‍👩‍👧</span> ${parentCount} Parents
+                  </span>
                   <span class="text-amber-600 dark:text-amber-400 flex items-center gap-1">
                     <span>🚌</span> ${driverCount} Drivers
                   </span>
-                  <span class="text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-                    <span>👨‍👩‍👧</span> ${parentCount} Parents
+                  <span class="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <span>👔</span> ${staffCount} Staff
                   </span>
                 </div>
               </div>
@@ -127,7 +134,7 @@ class StaffHomePage {
           </a>
         </div>
 
-        <!-- Quick Access Feature Grid (3 Core Cards) -->
+        <!-- Quick Access Feature Grid (3 Core Cards: Pass Scanner, Working Staffs, Daily Log Register) -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <a href="#/entry-exit-scanner" class="cr-card p-5 no-underline text-inherit group hover:border-blue-500 transition">
             <div class="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition">
@@ -137,12 +144,12 @@ class StaffHomePage {
             <p class="text-xs text-slate-500 dark:text-slate-400">Scan CAMPUSRIDE driver pass QRs with alternation check.</p>
           </a>
 
-          <a href="#/registration-scanner" class="cr-card p-5 no-underline text-inherit group hover:border-emerald-500 transition">
+          <a href="#/working-staff" class="cr-card p-5 no-underline text-inherit group hover:border-emerald-500 transition">
             <div class="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition">
-              📝
+              👔
             </div>
-            <h3 class="font-bold text-base text-slate-900 dark:text-white mb-1">Register Driver / Staff</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400">Fill details or scan QR code to issue immediate passes.</p>
+            <h3 class="font-bold text-base text-slate-900 dark:text-white mb-1">Working Staffs</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">View all account-based gate staff, security personnel, and active duty operators.</p>
           </a>
 
           <a href="#/van-register" class="cr-card p-5 no-underline text-inherit group hover:border-amber-500 transition">

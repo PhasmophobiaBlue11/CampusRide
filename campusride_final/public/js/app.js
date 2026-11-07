@@ -251,6 +251,9 @@
     } else if (path === '/live-map') {
       window.location.hash = '#/';
       return;
+    } else if (path === '/working-staff') {
+      pageHtml = await window.WorkingStaffPage.render(user);
+      attachCallback = () => window.WorkingStaffPage.attachEvents(user);
     } else if (path === '/directories' || path === '/parents') {
       pageHtml = await window.DirectoriesPage.render(user);
       attachCallback = () => window.DirectoriesPage.attachEvents(user);

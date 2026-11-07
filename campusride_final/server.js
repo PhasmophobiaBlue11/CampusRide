@@ -930,7 +930,7 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { success: true });
       }
 
-      // DRIVERS & STAFF REGISTRY: List all
+      // DRIVERS & STAFF REGISTRY: List all (Natural numeric sort: Van 1, Van 2, ... Van 10)
       if (pathname === '/api/drivers' && req.method === 'GET') {
         const type = urlObj.searchParams.get('type');
         let query = 'SELECT * FROM drivers';
@@ -939,24 +939,57 @@ const server = http.createServer(async (req, res) => {
           query += ' WHERE type = ?';
           params.push(type);
         }
-        query += ' ORDER BY label ASC';
+        query += " ORDER BY CAST(SUBSTR(label, INSTR(label, ' ') + 1) AS INTEGER) ASC, label ASC";
         const drivers = db.prepare(query).all(...params);
         return sendJson(res, 200, { drivers });
+      }
+
+      // WORKING STAFF: List all account-based staff accounts (e.g. Atharva Deshpande @Staff2026)
+      if (pathname === '/api/working-staff' && req.method === 'GET') {
+        if (!user) return sendError(res, 401, 'Unauthorized');
+        const staffRows = db.prepare(`
+          SELECT sr.id, sr.user_id, sr.full_name, sr.email as username, sr.phone, sr.status, sr.is_admin, sr.notes, sr.created_at
+          FROM staff_requests sr
+          ORDER BY sr.created_at ASC
+        `).all();
+
+        // Also ensure admin user is included if not in staff_requests
+        const adminUser = db.prepare("SELECT id, username, display_name, phone, role, created_at FROM users WHERE role = 'admin'").get();
+        const results = [...staffRows];
+        if (adminUser && !staffRows.some(s => s.username === adminUser.username || s.user_id === adminUser.id)) {
+          results.unshift({
+            id: 'admin_sys',
+            user_id: adminUser.id,
+            full_name: adminUser.display_name || 'System Administrator',
+            username: adminUser.username,
+            phone: adminUser.phone || '',
+            status: 'approved',
+            is_admin: 1,
+            notes: 'Master Administrator',
+            created_at: adminUser.created_at
+          });
+        }
+        return sendJson(res, 200, { staff: results });
       }
 
       // DRIVERS & STAFF REGISTRY: Add new
       if (pathname === '/api/drivers' && req.method === 'POST') {
         if (!user) return sendError(res, 401, 'Unauthorized');
-        const { driver_name, van_no, phone, vehicle_type, type } = await readJsonBody(req);
-        if (!driver_name || !van_no) return sendError(res, 400, 'Name and vehicle number are required');
+        const { driver_name, van_no, phone, vehicle_type, type, designation, duty } = await readJsonBody(req);
+        if (!driver_name) return sendError(res, 400, 'Staff/Driver name is required');
 
-        // Full Name Validation
+        // Full Name Validation (Both first and last name required, e.g. Ramu Chandan)
         const nameParts = driver_name.trim().split(/\s+/).filter(Boolean);
         if (nameParts.length < 2 || nameParts[0].length < 2 || nameParts[1].length < 2) {
-          return sendError(res, 400, 'Please enter the full name (both first and last name, e.g. Ramesh Sharma)');
+          return sendError(res, 400, 'Please enter the full name (both first and last name, e.g. Ramu Chandan)');
         }
 
         const kind = type === 'staff' ? 'staff' : 'van';
+        const roleOrPlate = (van_no || designation || duty || (kind === 'staff' ? 'Staff Pass' : '')).trim().toUpperCase();
+        if (kind === 'van' && !roleOrPlate) {
+          return sendError(res, 400, 'Vehicle number is required');
+        }
+
         const label = getNextLabel(kind);
         const id = generateId('drv');
         const now = new Date().toISOString();
@@ -964,7 +997,7 @@ const server = http.createServer(async (req, res) => {
         db.prepare(`
           INSERT INTO drivers (id, label, type, driver_name, license_number, van_no, phone, vehicle_type, raw_data, created_at)
           VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?)
-        `).run(id, label, kind, driver_name.trim(), van_no.trim().toUpperCase(), phone || '', vehicle_type || '4_wheeler', `Name: ${driver_name}`, now);
+        `).run(id, label, kind, driver_name.trim(), roleOrPlate, phone || '', vehicle_type || (kind === 'staff' ? 'walk_in' : '4_wheeler'), `Name: ${driver_name}`, now);
 
         if (kind === 'van') {
           db.prepare(`
@@ -973,13 +1006,14 @@ const server = http.createServer(async (req, res) => {
           `).run(id, label, now);
         }
 
+        saveBackupJson();
         broadcastEvent('driver_added', { id, label });
         return sendJson(res, 201, { id, label });
       }
 
       // DRIVERS & STAFF REGISTRY: Delete van or staff (Cascades logs & renumbers as per §7.3)
       if (pathname.startsWith('/api/drivers/') && req.method === 'DELETE') {
-        if (!user || user.role !== 'admin') return sendError(res, 403, 'Admin access required');
+        if (!user) return sendError(res, 401, 'Unauthorized');
         const driverId = pathname.split('/')[3];
         const driver = db.prepare('SELECT * FROM drivers WHERE id = ?').get(driverId);
         if (!driver) return sendError(res, 404, 'Driver/Staff entry not found');
@@ -992,6 +1026,7 @@ const server = http.createServer(async (req, res) => {
 
         // Renumber remaining drivers
         renumberAllDrivers(driver.type);
+        saveBackupJson();
         broadcastEvent('driver_deleted', { driverId, type: driver.type });
         return sendJson(res, 200, { success: true });
       }
@@ -1094,8 +1129,13 @@ const server = http.createServer(async (req, res) => {
           return sendError(res, 400, 'Wrong QR code — this is an entry/exit pass, not a registration QR.');
         }
 
+        // Try JSON parse first
+        let jsonParsed = null;
+        try {
+          jsonParsed = JSON.parse(text);
+        } catch {}
+
         // Parse key-value or delimited pairs
-        // Accepts formats: "Name: Ramesh, Vehicle: MH12AB1234, Phone: 9876543210" or "Name-..., vehicle no-..."
         const lines = text.split(/[\n,;]+/);
         const parsed = {};
         for (const line of lines) {
@@ -1107,34 +1147,82 @@ const server = http.createServer(async (req, res) => {
           }
         }
 
-        const driver_name = parsed['name'] || parsed['driver_name'] || parsed['driver'] || '';
-        const van_no = parsed['vehicle'] || parsed['vehicle_no'] || parsed['vehicle_number'] || parsed['plate'] || '';
-        const phone = parsed['phone'] || parsed['mobile'] || parsed['contact'] || '';
-        const vehicle_type = parsed['type'] && parsed['type'].includes('2') ? '2_wheeler' : '4_wheeler';
+        const kind = type === 'staff' ? 'staff' : 'van';
 
-        if (!driver_name || !van_no) {
-          return sendError(res, 400, `Incomplete QR code — Missing: ${!driver_name ? 'name ' : ''}${!van_no ? 'vehicle number' : ''}`);
+        if (kind === 'staff') {
+          // Non-gate Staff: ONLY Full Name is required (no vehicle no, no phone no)
+          let staffName = '';
+          if (jsonParsed && typeof jsonParsed === 'object') {
+            staffName = jsonParsed.name || jsonParsed.fullName || jsonParsed.full_name || jsonParsed.staff_name || jsonParsed.driver_name || '';
+          }
+          if (!staffName) {
+            staffName = parsed['name'] || parsed['staff_name'] || parsed['staff'] || parsed['full_name'] || parsed['driver_name'] || '';
+          }
+          if (!staffName && !text.includes(':') && !text.includes('=')) {
+            // Plain text QR (e.g. "Ramu Chandan")
+            staffName = text.trim();
+          }
+
+          // Strict Sufficiency Validation for Staff
+          const nameParts = (staffName || '').trim().split(/\s+/).filter(Boolean);
+          const isSufficient = nameParts.length >= 2 && nameParts[0].length >= 2 && nameParts[1].length >= 2 && !/https?:\/\/|[{}\[\]<>]/.test(staffName);
+
+          if (!isSufficient) {
+            return sendError(res, 400, `Insufficient information in QR code: The QR code must contain the staff member's full name (both first and last name, e.g. Ramu Chandan). Found: "${(staffName || text).slice(0, 35)}". Not added.`);
+          }
+
+          const label = getNextLabel('staff');
+          const id = generateId('drv');
+          const now = new Date().toISOString();
+
+          db.prepare(`
+            INSERT INTO drivers (id, label, type, driver_name, license_number, van_no, phone, vehicle_type, raw_data, created_at)
+            VALUES (?, ?, 'staff', ?, '', 'Staff Pass', '', 'walk_in', ?, ?)
+          `).run(id, label, staffName.trim(), text, now);
+
+          saveBackupJson();
+          broadcastEvent('driver_added', { id, label, driver_name: staffName.trim(), van_no: 'Staff Pass' });
+          return sendJson(res, 201, { success: true, label, id, driver_name: staffName.trim(), van_no: 'Staff Pass' });
         }
 
-        const kind = type === 'staff' ? 'staff' : 'van';
-        const label = getNextLabel(kind);
+        // Campus Van / Driver registration
+        let driver_name = '';
+        if (jsonParsed && typeof jsonParsed === 'object') {
+          driver_name = jsonParsed.name || jsonParsed.driver_name || jsonParsed.fullName || '';
+        }
+        if (!driver_name) {
+          driver_name = parsed['name'] || parsed['driver_name'] || parsed['driver'] || '';
+        }
+
+        const van_no = (jsonParsed && (jsonParsed.vehicle || jsonParsed.plate || jsonParsed.van_no)) || parsed['vehicle'] || parsed['vehicle_no'] || parsed['vehicle_number'] || parsed['plate'] || '';
+        const phone = (jsonParsed && jsonParsed.phone) || parsed['phone'] || parsed['mobile'] || parsed['contact'] || '';
+        const vehicle_type = parsed['type'] && parsed['type'].includes('2') ? '2_wheeler' : '4_wheeler';
+
+        // Check if sufficient info for Van
+        const nameParts = (driver_name || '').trim().split(/\s+/).filter(Boolean);
+        const nameValid = nameParts.length >= 2 && nameParts[0].length >= 2 && nameParts[1].length >= 2;
+
+        if (!driver_name || !van_no || !nameValid) {
+          return sendError(res, 400, `Insufficient information in QR code: Missing ${!driver_name ? 'full name ' : !nameValid ? 'valid full name (first & last name) ' : ''}${!van_no ? 'vehicle plate number' : ''}. Not added.`);
+        }
+
+        const label = getNextLabel('van');
         const id = generateId('drv');
         const now = new Date().toISOString();
 
         db.prepare(`
           INSERT INTO drivers (id, label, type, driver_name, license_number, van_no, phone, vehicle_type, raw_data, created_at)
-          VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?)
-        `).run(id, label, kind, driver_name, van_no.toUpperCase(), phone, vehicle_type, text, now);
+          VALUES (?, ?, 'van', ?, '', ?, ?, ?, ?, ?)
+        `).run(id, label, driver_name.trim(), van_no.toUpperCase(), phone, vehicle_type, text, now);
 
-        if (kind === 'van') {
-          db.prepare(`
-            INSERT INTO van_locations (van_id, van_label, lat, lng, live, updated_at)
-            VALUES (?, ?, 0, 0, 0, ?)
-          `).run(id, label, now);
-        }
+        db.prepare(`
+          INSERT INTO van_locations (van_id, van_label, lat, lng, live, updated_at)
+          VALUES (?, ?, 0, 0, 0, ?)
+        `).run(id, label, now);
 
-        broadcastEvent('driver_added', { id, label, driver_name, van_no });
-        return sendJson(res, 201, { success: true, label, id, driver_name, van_no });
+        saveBackupJson();
+        broadcastEvent('driver_added', { id, label, driver_name: driver_name.trim(), van_no });
+        return sendJson(res, 201, { success: true, label, id, driver_name: driver_name.trim(), van_no });
       }
 
       // VAN ENTRY/EXIT REGISTER: View logs with date filter & pagination (§7.6)

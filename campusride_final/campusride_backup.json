@@ -117,6 +117,18 @@
       "user_id": "usr_par_27e2c48fb500c2f8",
       "created_at": 1794041493686,
       "last_active": 1825577493686
+    },
+    {
+      "token": "cr_1dc76f4d16a57a3e7ca7a7de2f4f67f143e6ee1ad342985e",
+      "user_id": "usr_perm_admin",
+      "created_at": 1794047540787,
+      "last_active": 1794047540787
+    },
+    {
+      "token": "cr_9c4c9c2a320528cf72a928a70f5c78f8f8879cbc8590c4ba",
+      "user_id": "usr_staff_1d94adaf1651db61",
+      "created_at": 1794047955875,
+      "last_active": 1794047955875
     }
   ],
   "van_logs": []
