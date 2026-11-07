@@ -232,17 +232,18 @@ class DriversRegistryPage {
         <form id="add-driver-form" class="space-y-3.5">
           <div>
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Name (Driver / Staff)</label>
-            <input type="text" id="new-driver-name" required class="cr-input" placeholder="e.g. Ramesh Sharma" />
+            <input type="text" id="new-driver-name" required class="cr-input" placeholder="e.g. Ramesh Sharma" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
           </div>
 
           <div>
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Phone Number (10 Digits)</label>
-            <input type="tel" id="new-driver-phone" class="cr-input" placeholder="9876500000" pattern="[0-9]{10}" />
+            <input type="tel" id="new-driver-phone" class="cr-input" placeholder="9876500000" pattern="[0-9]{10}" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
           </div>
 
           <div>
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Vehicle License Plate</label>
-            <input type="text" id="new-driver-plate" required minlength="6" class="cr-input uppercase font-mono font-bold tracking-wider" placeholder="__ __ __ ____" />
+            <input type="text" id="new-driver-plate" required minlength="6" class="cr-input uppercase font-mono font-bold tracking-wider text-center" placeholder="__  __  __  ____" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" data-lpignore="true" />
+            <p class="text-[10px] text-slate-400 mt-1 text-center font-medium">Spaces fill automatically</p>
           </div>
 
           <div>

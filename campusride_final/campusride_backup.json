@@ -1,0 +1,123 @@
+{
+  "users": [
+    {
+      "id": "usr_perm_admin",
+      "email": "Admin2026",
+      "password_hash": "63514ae1a9e935821fa45fde459e366a469705582b83871939fe08d05e9fb349",
+      "role": "admin",
+      "display_name": "System Administrator",
+      "phone": "9876500000",
+      "blocked": 0,
+      "created_at": "2026-11-07T08:35:00.000Z",
+      "username": "Admin2026"
+    },
+    {
+      "id": "usr_drv_a1447b7b0063f876",
+      "email": "Driver2026",
+      "password_hash": "63514ae1a9e935821fa45fde459e366a469705582b83871939fe08d05e9fb349",
+      "role": "user",
+      "display_name": "Ramesh Sharma",
+      "phone": "7218134184",
+      "blocked": 0,
+      "created_at": "2026-11-07T08:35:00.000Z",
+      "username": "Driver2026"
+    },
+    {
+      "id": "usr_par_27e2c48fb500c2f8",
+      "email": "Parent2026",
+      "password_hash": "63514ae1a9e935821fa45fde459e366a469705582b83871939fe08d05e9fb349",
+      "role": "user",
+      "display_name": "Soham Deshpande",
+      "phone": "9404855992",
+      "blocked": 0,
+      "created_at": "2026-11-07T08:35:00.000Z",
+      "username": "Parent2026"
+    },
+    {
+      "id": "usr_staff_1d94adaf1651db61",
+      "email": "Staff2026",
+      "password_hash": "63514ae1a9e935821fa45fde459e366a469705582b83871939fe08d05e9fb349",
+      "role": "user",
+      "display_name": "Atharva Deshpande",
+      "phone": "7030951190",
+      "blocked": 0,
+      "created_at": "2026-11-07T08:35:00.000Z",
+      "username": "Staff2026"
+    }
+  ],
+  "drivers": [
+    {
+      "id": "drv_van_9986abb8c2b46701",
+      "label": "Van 1",
+      "type": "van",
+      "driver_name": "Ramesh Sharma",
+      "license_number": "",
+      "van_no": "MH 31 DC 9122",
+      "phone": "7218134184",
+      "vehicle_type": "4_wheeler",
+      "raw_data": "Name: Ramesh Sharma, Van: MH 31 DC 9122",
+      "created_at": "2026-11-07T08:35:00.000Z"
+    }
+  ],
+  "driver_profiles": [
+    {
+      "id": "dp_d716c18910a9188b",
+      "user_id": "usr_drv_a1447b7b0063f876",
+      "name": "Ramesh Sharma",
+      "phone": "7218134184",
+      "selected_van_id": "drv_van_9986abb8c2b46701",
+      "selected_van_label": "Van 1"
+    }
+  ],
+  "parents": [
+    {
+      "id": "par_5a5598f242bec70e",
+      "user_id": "usr_par_27e2c48fb500c2f8",
+      "name": "Soham Deshpande",
+      "phone": "9404855992",
+      "address": "Near sangha ground",
+      "address_lat": 21.1219,
+      "address_lng": 79.0601,
+      "selected_van_id": "drv_van_9986abb8c2b46701",
+      "selected_van_label": "Van 1"
+    }
+  ],
+  "children": [
+    {
+      "id": "ch_4ca09db9c1104d36",
+      "parent_id": "usr_par_27e2c48fb500c2f8",
+      "name": "Hrushikesh Bhusari",
+      "van_id": "drv_van_9986abb8c2b46701",
+      "van_label": "Van 1",
+      "created_at": "2026-11-07T08:35:00.000Z"
+    }
+  ],
+  "staff_requests": [
+    {
+      "id": "req_975a4bc5e193a22d",
+      "user_id": "usr_staff_1d94adaf1651db61",
+      "full_name": "Atharva Deshpande",
+      "email": "Staff2026",
+      "phone": "7030951190",
+      "status": "approved",
+      "notes": "",
+      "is_admin": 0,
+      "created_at": "2026-11-07T08:35:00.000Z"
+    }
+  ],
+  "sessions": [
+    {
+      "token": "cr_305f0fec067b19cde1cce5402f466fea57811b4e831e6142",
+      "user_id": "usr_drv_a1447b7b0063f876",
+      "created_at": 1794041493686,
+      "last_active": 1825577493686
+    },
+    {
+      "token": "cr_fd914e7abe0bf514b1c4d6c0c9fd9463bdf51d08708b3483",
+      "user_id": "usr_par_27e2c48fb500c2f8",
+      "created_at": 1794041493686,
+      "last_active": 1825577493686
+    }
+  ],
+  "van_logs": []
+}

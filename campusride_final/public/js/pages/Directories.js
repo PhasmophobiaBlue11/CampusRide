@@ -139,14 +139,10 @@ class DirectoriesPage {
 
                 <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
                   ${p.phone ? `
-                    <a href="tel:${p.phone}" class="cr-btn bg-indigo-600 hover:bg-indigo-500 text-white flex-1 py-1.5 text-xs text-center font-bold">
-                      📞 Call Parent
+                    <a href="tel:${p.phone}" class="cr-btn bg-indigo-600 hover:bg-indigo-500 text-white w-full py-2 text-xs text-center font-bold">
+                      📞 Call Parent (${p.phone})
                     </a>
                   ` : ''}
-                  <button type="button" class="dir-parent-maps-btn cr-btn cr-btn-secondary flex-1 py-1.5 text-xs text-center cursor-pointer select-none"
-                          data-lat="${p.address_lat || ''}" data-lng="${p.address_lng || ''}" data-address="${encodeURIComponent(p.address || '')}">
-                    🗺️ Google Maps
-                  </button>
                 </div>
               </div>
             `).join('')}
@@ -188,25 +184,6 @@ class DirectoriesPage {
         const phone = btn.getAttribute('data-phone');
         if (window.showDriverPassQRModal) {
           window.showDriverPassQRModal({ id, label, name, plate, phone });
-        }
-      };
-    });
-
-    document.querySelectorAll('.dir-parent-maps-btn').forEach(btn => {
-      btn.onclick = () => {
-        const lat = btn.getAttribute('data-lat');
-        const lng = btn.getAttribute('data-lng');
-        const address = decodeURIComponent(btn.getAttribute('data-address') || '');
-        if (window.openDirectionsTo) {
-          window.openDirectionsTo(lat, lng, address);
-        } else {
-          let url = '';
-          if (lat && lng && Number(lat) !== 0) {
-            url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
-          } else if (address) {
-            url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}&travelmode=driving`;
-          }
-          if (url) window.open(url, '_blank');
         }
       };
     });

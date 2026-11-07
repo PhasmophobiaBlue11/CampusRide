@@ -61,27 +61,27 @@ class DriverRegisterPage {
             </p>
           </div>
 
-          <form id="driver-reg-form" class="space-y-4">
+          <form id="driver-reg-form" class="space-y-4" autocomplete="off">
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Full Driver Name</label>
-              <input type="text" id="driver-name" required class="cr-input" placeholder="e.g. Ramesh Sharma" />
+              <input type="text" id="driver-name" required class="cr-input" placeholder="e.g. Ramesh Sharma" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
             </div>
 
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Choose Username</label>
-              <input type="text" id="driver-username" required minlength="3" class="cr-input" placeholder="e.g. Ramesh2026 or driverXYZ" autocomplete="username" />
+              <input type="text" id="driver-username" required minlength="3" class="cr-input" placeholder="e.g. Ramesh2026 or driverXYZ" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" />
               <p class="text-[10px] text-slate-400 mt-0.5">Used to log in to the Driver App on this device.</p>
             </div>
 
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Mobile Phone (10 Digits)</label>
-              <input type="tel" id="driver-phone" required class="cr-input" placeholder="9876543210" pattern="[0-9]{10}" />
+              <input type="tel" id="driver-phone" required class="cr-input" placeholder="9876543210" pattern="[0-9]{10}" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
             </div>
 
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Password</label>
               <div class="relative flex items-center">
-                <input type="password" id="driver-password" required minlength="6" class="cr-input pr-11" placeholder="••••••••" autocomplete="new-password" />
+                <input type="password" id="driver-password" required minlength="6" class="cr-input pr-11" placeholder="••••••••" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" />
                 <button type="button" id="toggle-driver-password" class="absolute right-2.5 p-1 text-base text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none">
                   👁️
                 </button>
@@ -90,7 +90,8 @@ class DriverRegisterPage {
 
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Vehicle License Plate Number</label>
-              <input type="text" id="driver-van-no" required minlength="6" class="cr-input uppercase tracking-wider font-mono font-bold" placeholder="__ __ __ ____" />
+              <input type="text" id="driver-van-no" required minlength="6" class="cr-input uppercase tracking-wider font-mono font-bold text-center text-base" placeholder="__  __  __  ____" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" data-lpignore="true" />
+              <p class="text-[10px] text-slate-400 mt-1 text-center font-medium">Spaces fill automatically as you type (State, District, Series, Number)</p>
             </div>
 
             <div>
@@ -166,10 +167,41 @@ class DriverRegisterPage {
       };
     }
 
-    // Attach auto-spacing plate formatter
+    // Auto-spacing Indian License Plate Formatter
     const vanNoInput = document.getElementById('driver-van-no');
-    if (vanNoInput && window.attachPlateFormatter) {
-      window.attachPlateFormatter(vanNoInput);
+    if (vanNoInput) {
+      let isBackspacing = false;
+      vanNoInput.addEventListener('keydown', (e) => {
+        isBackspacing = e.key === 'Backspace' || e.key === 'Delete';
+      });
+
+      vanNoInput.addEventListener('input', () => {
+        if (isBackspacing) return;
+        let raw = vanNoInput.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+        if (raw.length > 10) raw = raw.slice(0, 10);
+
+        let formatted = '';
+        if (raw.length <= 2) {
+          formatted = raw;
+        } else if (raw.length <= 4) {
+          formatted = raw.slice(0, 2) + ' ' + raw.slice(2);
+        } else if (raw.length <= 6) {
+          formatted = raw.slice(0, 2) + ' ' + raw.slice(2, 4) + ' ' + raw.slice(4);
+        } else {
+          let state = raw.slice(0, 2);
+          let rto = raw.slice(2, 4);
+          let tail = raw.slice(4);
+          let lettersMatch = tail.match(/^[A-Z]+/);
+          if (lettersMatch) {
+            let series = lettersMatch[0].slice(0, 2);
+            let digits = tail.slice(series.length).slice(0, 4);
+            formatted = `${state} ${rto} ${series}${digits ? ' ' + digits : ''}`;
+          } else {
+            formatted = `${state} ${rto} ${tail.slice(0, 2)} ${tail.slice(2, 6)}`;
+          }
+        }
+        vanNoInput.value = formatted.trim();
+      });
     }
 
     const form = document.getElementById('driver-reg-form');

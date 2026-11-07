@@ -18,82 +18,132 @@ const db = new DatabaseSync(DB_PATH);
 // Permanent Master Administrator
 const PERMANENT_ADMIN_USERNAME = 'Admin2026';
 const PERMANENT_ADMIN_PASSWORD = 'Parth@123';
+const BACKUP_JSON_PATH = path.join(__dirname, 'campusride_backup.json');
+
+// Save entire database snapshot to campusride_backup.json to survive Render redeployments
+function saveBackupJson() {
+  try {
+    const backup = {
+      users: db.prepare('SELECT * FROM users').all(),
+      drivers: db.prepare('SELECT * FROM drivers').all(),
+      driver_profiles: db.prepare('SELECT * FROM driver_profiles').all(),
+      parents: db.prepare('SELECT * FROM parents').all(),
+      children: db.prepare('SELECT * FROM children').all(),
+      staff_requests: db.prepare('SELECT * FROM staff_requests').all(),
+      sessions: db.prepare('SELECT * FROM sessions').all(),
+      van_logs: db.prepare('SELECT * FROM van_logs ORDER BY timestamp DESC LIMIT 100').all()
+    };
+    fs.writeFileSync(BACKUP_JSON_PATH, JSON.stringify(backup, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[CampusRide] Notice saving backup JSON:', err.message);
+  }
+}
+
+// Restore database snapshot from campusride_backup.json on cold boots or fresh redeploys
+function restoreBackupJson() {
+  if (!fs.existsSync(BACKUP_JSON_PATH)) return;
+  try {
+    const raw = fs.readFileSync(BACKUP_JSON_PATH, 'utf-8');
+    const data = JSON.parse(raw);
+    
+    // Restore users
+    if (Array.isArray(data.users)) {
+      const insertUser = db.prepare(`
+        INSERT OR IGNORE INTO users (id, username, email, password_hash, role, display_name, phone, blocked, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const u of data.users) {
+        insertUser.run(u.id, u.username || u.email, u.email || u.username, u.password_hash, u.role || 'user', u.display_name || '', u.phone || '', u.blocked || 0, u.created_at || new Date().toISOString());
+      }
+    }
+
+    // Restore drivers
+    if (Array.isArray(data.drivers)) {
+      const insertDriver = db.prepare(`
+        INSERT OR IGNORE INTO drivers (id, label, type, driver_name, license_number, van_no, phone, vehicle_type, raw_data, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const d of data.drivers) {
+        insertDriver.run(d.id, d.label, d.type || 'van', d.driver_name || '', d.license_number || '', d.van_no || '', d.phone || '', d.vehicle_type || '4_wheeler', d.raw_data || '', d.created_at || new Date().toISOString());
+      }
+    }
+
+    // Restore driver profiles
+    if (Array.isArray(data.driver_profiles)) {
+      const insertDp = db.prepare(`
+        INSERT OR IGNORE INTO driver_profiles (id, user_id, name, phone, selected_van_id, selected_van_label)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      for (const dp of data.driver_profiles) {
+        insertDp.run(dp.id, dp.user_id, dp.name || '', dp.phone || '', dp.selected_van_id || null, dp.selected_van_label || null);
+      }
+    }
+
+    // Restore parents
+    if (Array.isArray(data.parents)) {
+      const insertPar = db.prepare(`
+        INSERT OR IGNORE INTO parents (id, user_id, name, phone, address, address_lat, address_lng, selected_van_id, selected_van_label)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const p of data.parents) {
+        insertPar.run(p.id, p.user_id, p.name || '', p.phone || '', p.address || '', p.address_lat || 0, p.address_lng || 0, p.selected_van_id || null, p.selected_van_label || null);
+      }
+    }
+
+    // Restore children
+    if (Array.isArray(data.children)) {
+      const insertChild = db.prepare(`
+        INSERT OR IGNORE INTO children (id, parent_id, name, van_id, van_label, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      for (const c of data.children) {
+        insertChild.run(c.id, c.parent_id, c.name, c.van_id || null, c.van_label || null, c.created_at || new Date().toISOString());
+      }
+    }
+
+    // Restore staff requests
+    if (Array.isArray(data.staff_requests)) {
+      const insertStaff = db.prepare(`
+        INSERT OR IGNORE INTO staff_requests (id, user_id, full_name, email, phone, status, notes, is_admin, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const s of data.staff_requests) {
+        insertStaff.run(s.id, s.user_id || null, s.full_name, s.email, s.phone, s.status || 'pending', s.notes || '', s.is_admin || 0, s.created_at || new Date().toISOString());
+      }
+    }
+
+    // Restore sessions (so users are never randomly logged out across redeployments)
+    if (Array.isArray(data.sessions)) {
+      const insertSession = db.prepare(`
+        INSERT OR IGNORE INTO sessions (token, user_id, created_at, last_active)
+        VALUES (?, ?, ?, ?)
+      `);
+      for (const sess of data.sessions) {
+        insertSession.run(sess.token, sess.user_id, sess.created_at, sess.last_active);
+      }
+    }
+
+    // Restore van logs
+    if (Array.isArray(data.van_logs)) {
+      const insertLog = db.prepare(`
+        INSERT OR IGNORE INTO van_logs (id, qr_identifier, driver_id, driver_name, driver_label, event_type, scanned_by, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const l of data.van_logs) {
+        insertLog.run(l.id, l.qr_identifier || '', l.driver_id, l.driver_name || '', l.driver_label || '', l.event_type, l.scanned_by || '', l.timestamp);
+      }
+    }
+
+    console.log('[CampusRide] Verified and synchronized backup data from campusride_backup.json');
+  } catch (err) {
+    console.warn('[CampusRide] Notice restoring backup JSON:', err.message);
+  }
+}
 
 function ensurePermanentAdmin() {
   const now = new Date().toISOString();
 
-  // Remove legacy email admin if present
-  try {
-    db.prepare('DELETE FROM users WHERE lower(email) = ? OR lower(username) = ?').run('adphasmo@gmail.com', 'adphasmo@gmail.com');
-  } catch (e) {}
-
-  // Remove all previous legacy email/account-based drivers, parents, and staff
-  try {
-    const legacyUsers = db.prepare(`
-      SELECT id, role, email FROM users 
-      WHERE id != 'usr_perm_admin' 
-        AND (username IS NULL OR username = '' OR username LIKE '%@%' OR email LIKE '%@%')
-        AND lower(coalesce(username, '')) != lower(?)
-        AND lower(coalesce(email, '')) != lower(?)
-    `).all(PERMANENT_ADMIN_USERNAME, PERMANENT_ADMIN_USERNAME);
-
-    for (const u of legacyUsers) {
-      // Driver cleanup
-      const dp = db.prepare('SELECT selected_van_id FROM driver_profiles WHERE user_id = ?').get(u.id);
-      if (dp && dp.selected_van_id) {
-        db.prepare('DELETE FROM drivers WHERE id = ?').run(dp.selected_van_id);
-        db.prepare('DELETE FROM van_locations WHERE van_id = ?').run(dp.selected_van_id);
-        db.prepare('DELETE FROM van_logs WHERE driver_id = ?').run(dp.selected_van_id);
-        db.prepare('DELETE FROM ride_alerts WHERE van_id = ?').run(dp.selected_van_id);
-        db.prepare('DELETE FROM children WHERE van_id = ?').run(dp.selected_van_id);
-      }
-      db.prepare('DELETE FROM driver_profiles WHERE user_id = ?').run(u.id);
-
-      // Parent cleanup
-      db.prepare('DELETE FROM children WHERE parent_id = ?').run(u.id);
-      db.prepare('DELETE FROM parents WHERE user_id = ?').run(u.id);
-      db.prepare('DELETE FROM parent_notifications WHERE parent_id = ?').run(u.id);
-
-      // Staff cleanup
-      db.prepare('DELETE FROM staff_requests WHERE user_id = ? OR email = ?').run(u.id, u.email);
-
-      // Delete user
-      db.prepare('DELETE FROM users WHERE id = ?').run(u.id);
-      console.log(`[CampusRide] Purged legacy account-based user: id="${u.id}", email="${u.email}"`);
-    }
-
-    // Also clean up any orphaned driver records not associated with an active username-based driver profile
-    const orphanedDrivers = db.prepare(`
-      SELECT id FROM drivers 
-      WHERE id NOT IN (
-        SELECT dp.selected_van_id FROM driver_profiles dp 
-        JOIN users u ON dp.user_id = u.id 
-        WHERE u.username IS NOT NULL AND u.username != '' AND u.username NOT LIKE '%@%'
-      )
-    `).all();
-
-    for (const od of orphanedDrivers) {
-      db.prepare('DELETE FROM van_locations WHERE van_id = ?').run(od.id);
-      db.prepare('DELETE FROM van_logs WHERE driver_id = ?').run(od.id);
-      db.prepare('DELETE FROM ride_alerts WHERE van_id = ?').run(od.id);
-      db.prepare('DELETE FROM children WHERE van_id = ?').run(od.id);
-      db.prepare('DELETE FROM drivers WHERE id = ?').run(od.id);
-      console.log(`[CampusRide] Purged orphaned driver record: id="${od.id}"`);
-    }
-
-    // Also remove any orphaned staff requests not tied to a valid username-based user
-    db.prepare(`
-      DELETE FROM staff_requests 
-      WHERE user_id NOT IN (
-        SELECT id FROM users 
-        WHERE username IS NOT NULL AND username != '' AND username NOT LIKE '%@%'
-      )
-    `).run();
-
-  } catch (err) {
-    console.warn('[CampusRide] Notice while purging legacy account-based records:', err.message);
-  }
-
+  // Ensure Admin2026 always exists and cannot be lost
   const existing = db.prepare('SELECT id FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)').get(PERMANENT_ADMIN_USERNAME, PERMANENT_ADMIN_USERNAME);
   if (!existing) {
     db.prepare(`
@@ -243,7 +293,14 @@ function initDatabase() {
     db.exec(`ALTER TABLE users ADD COLUMN username TEXT;`);
   } catch (e) {}
 
+  // Restore snapshot if needed
+  restoreBackupJson();
+
+  // Ensure Admin2026 is active
   ensurePermanentAdmin();
+
+  // Keep backup JSON synchronized
+  saveBackupJson();
 }
 
 // Simple deterministic hash for demo authentication
@@ -298,6 +355,7 @@ function createToken(userId) {
   activeSessions.set(token, { userId, created: now, last_active: now });
   try {
     db.prepare('INSERT OR REPLACE INTO sessions (token, user_id, created_at, last_active) VALUES (?, ?, ?, ?)').run(token, userId, now, now);
+    saveBackupJson();
   } catch (err) {
     console.error('[Session] SQLite insert error:', err.message);
   }
@@ -599,6 +657,7 @@ const server = http.createServer(async (req, res) => {
         db.prepare('DELETE FROM staff_requests WHERE user_id = ?').run(found.id);
         db.prepare('DELETE FROM users WHERE id = ?').run(found.id);
         console.log(`[CampusRide] Device deleted account: "${username}" (role: ${role || found.role})`);
+        saveBackupJson();
         return sendJson(res, 200, { success: true, message: `Account "${username}" successfully deleted.` });
       }
 
@@ -676,6 +735,7 @@ const server = http.createServer(async (req, res) => {
         const token = createToken(newUserId);
         const profile = getUserProfile(newUserId);
         broadcastEvent('staff_request_created', { id: reqId, fullName, username: rawUser });
+        saveBackupJson();
         return sendJson(res, 201, { token, user: profile, message: 'Staff registration submitted successfully.' });
       }
 
@@ -718,6 +778,7 @@ const server = http.createServer(async (req, res) => {
         const token = createToken(newUserId);
         const profile = getUserProfile(newUserId);
         broadcastEvent('driver_registered', { vanId, nextLabel });
+        saveBackupJson();
         return sendJson(res, 201, { token, user: profile, message: 'Driver registered successfully!' });
       }
 
@@ -743,10 +804,11 @@ const server = http.createServer(async (req, res) => {
         db.prepare(`
           INSERT INTO parents (id, user_id, name, phone, address, address_lat, address_lng, selected_van_id, selected_van_label)
           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)
-        `).run(generateId('par'), newUserId, fullName.trim(), phone.trim(), address || '', lat || 21.1458, lng || 79.0882);
+        `).run(generateId('par'), newUserId, fullName.trim(), phone.trim(), address || '', lat || 0, lng || 0);
 
         const token = createToken(newUserId);
         const profile = getUserProfile(newUserId);
+        saveBackupJson();
         return sendJson(res, 201, { token, user: profile, message: 'Parent account created successfully!' });
       }
 
@@ -772,6 +834,7 @@ const server = http.createServer(async (req, res) => {
         const newHash = hashPassword(newPassword);
         db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, foundUser.id);
         console.log(`[CampusRide] Password reset for user: ${foundUser.username || foundUser.email}`);
+        saveBackupJson();
         return sendJson(res, 200, { success: true, message: 'Password reset successfully! Please sign in with your new password.' });
       }
 
@@ -992,6 +1055,7 @@ const server = http.createServer(async (req, res) => {
         };
 
         broadcastEvent('scan_recorded', scanResult);
+        saveBackupJson();
         return sendJson(res, 200, scanResult);
       }
 
@@ -1216,11 +1280,91 @@ const server = http.createServer(async (req, res) => {
         if (!vanId && user.driverProfile && user.driverProfile.selected_van_id) {
           vanId = user.driverProfile.selected_van_id;
         }
+        const now = new Date().toISOString();
         if (vanId) {
-          db.prepare('UPDATE van_locations SET live = 0, updated_at = ? WHERE van_id = ?').run(new Date().toISOString(), vanId);
-          broadcastEvent('journey_ended', { vanId });
+          db.prepare('UPDATE van_locations SET live = 0, updated_at = ? WHERE van_id = ?').run(now, vanId);
+          const van = db.prepare('SELECT id, label, driver_name FROM drivers WHERE id = ?').get(vanId);
+          if (van) {
+            db.prepare(`
+              INSERT INTO van_logs (id, qr_identifier, driver_id, driver_name, driver_label, event_type, scanned_by, timestamp)
+              VALUES (?, '', ?, ?, ?, 'journey_end', ?, ?)
+            `).run(generateId('log'), van.id, van.driver_name, van.label, user.display_name || user.username || user.email, now);
+
+            // Notify parents that journey completed
+            const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const trackingChildren = db.prepare('SELECT parent_id FROM children WHERE van_id = ?').all(van.id);
+            for (const child of trackingChildren) {
+              db.prepare(`
+                INSERT INTO parent_notifications (id, parent_id, van_id, van_label, event_type, event_time, message, read, created_at)
+                VALUES (?, ?, ?, ?, 'journey_end', ?, ?, 0, ?)
+              `).run(generateId('notif'), child.parent_id, van.id, van.label, now, `${van.label} completed its transit journey at ${timeStr}.`, now);
+            }
+          }
+          broadcastEvent('journey_ended', { vanId, label: van?.label, timestamp: now });
+          saveBackupJson();
         }
         return sendJson(res, 200, { success: true, live: false });
+      }
+
+      // PARENT DASHBOARD: Dedicated Notification Boards (Journey Activity + Campus Gate Entry/Exit)
+      if (pathname === '/api/parent/boards' && req.method === 'GET') {
+        if (!user) return sendError(res, 401, 'Unauthorized');
+        
+        let targetVanId = urlObj.searchParams.get('vanId');
+        if (!targetVanId) {
+          const child = db.prepare('SELECT van_id FROM children WHERE parent_id = ? AND van_id IS NOT NULL LIMIT 1').get(user.id);
+          if (child && child.van_id) targetVanId = child.van_id;
+        }
+        if (!targetVanId && user.parentProfile && user.parentProfile.selected_van_id) {
+          targetVanId = user.parentProfile.selected_van_id;
+        }
+
+        let van = null;
+        if (targetVanId) {
+          van = db.prepare('SELECT id, label, driver_name, van_no, phone, vehicle_type FROM drivers WHERE id = ?').get(targetVanId);
+        }
+        if (!van) {
+          van = db.prepare("SELECT id, label, driver_name, van_no, phone, vehicle_type FROM drivers WHERE type = 'van' LIMIT 1").get();
+        }
+
+        const vanId = van ? van.id : null;
+        let isJourneyActive = false;
+        let isCampusPresent = false;
+        let journeyLogs = [];
+        let gateLogs = [];
+
+        if (vanId) {
+          const loc = db.prepare('SELECT live FROM van_locations WHERE van_id = ?').get(vanId);
+          isJourneyActive = Boolean(loc && loc.live);
+
+          // Journey Activity Board: 'journey_start' and 'journey_end'
+          journeyLogs = db.prepare(`
+            SELECT id, driver_id, driver_name, driver_label, event_type, scanned_by, timestamp 
+            FROM van_logs 
+            WHERE driver_id = ? AND (event_type = 'journey_start' OR event_type = 'journey_end')
+            ORDER BY timestamp DESC LIMIT 30
+          `).all(vanId);
+
+          // Campus Gate Security Board: 'entry' and 'exit'
+          gateLogs = db.prepare(`
+            SELECT id, driver_id, driver_name, driver_label, event_type, scanned_by, timestamp 
+            FROM van_logs 
+            WHERE driver_id = ? AND (event_type = 'entry' OR event_type = 'exit')
+            ORDER BY timestamp DESC LIMIT 30
+          `).all(vanId);
+
+          if (gateLogs.length > 0 && gateLogs[0].event_type === 'entry') {
+            isCampusPresent = true;
+          }
+        }
+
+        return sendJson(res, 200, {
+          van,
+          isJourneyActive,
+          isCampusPresent,
+          journeyLogs,
+          gateLogs
+        });
       }
 
       // LIVE GPS: Update position from driver device (§7.8)

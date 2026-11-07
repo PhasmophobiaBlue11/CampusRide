@@ -79,20 +79,21 @@ class RegistrationScannerPage {
             </p>
           </div>
 
-          <form id="manual-reg-form" class="space-y-4">
+          <form id="manual-reg-form" class="space-y-4" autocomplete="off">
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Driver / Staff Full Name</label>
-              <input type="text" id="manual-driver-name" required class="cr-input" placeholder="e.g. Ramesh Sharma" />
+              <input type="text" id="manual-driver-name" required class="cr-input" placeholder="e.g. Ramesh Sharma" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
             </div>
 
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Phone Number (10 Digits)</label>
-              <input type="tel" id="manual-driver-phone" class="cr-input" placeholder="9876500000" pattern="[0-9]{10}" />
+              <input type="tel" id="manual-driver-phone" class="cr-input" placeholder="9876500000" pattern="[0-9]{10}" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
             </div>
 
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Vehicle License Plate (Number)</label>
-              <input type="text" id="manual-driver-plate" required minlength="6" class="cr-input uppercase font-mono font-bold tracking-wider" placeholder="__ __ __ ____" />
+              <input type="text" id="manual-driver-plate" required minlength="6" class="cr-input uppercase font-mono font-bold tracking-wider text-center" placeholder="__  __  __  ____" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" data-lpignore="true" />
+              <p class="text-[10px] text-slate-400 mt-1 text-center font-medium">Spaces fill automatically as you type</p>
             </div>
 
             <div>
@@ -199,10 +200,39 @@ class RegistrationScannerPage {
       };
     }
 
-    // Manual Form Submit
+    // Manual Form Plate Formatter
     const manualPlate = document.getElementById('manual-driver-plate');
-    if (manualPlate && window.attachPlateFormatter) {
-      window.attachPlateFormatter(manualPlate);
+    if (manualPlate) {
+      let isBackspacing = false;
+      manualPlate.addEventListener('keydown', (e) => {
+        isBackspacing = e.key === 'Backspace' || e.key === 'Delete';
+      });
+      manualPlate.addEventListener('input', () => {
+        if (isBackspacing) return;
+        let raw = manualPlate.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+        if (raw.length > 10) raw = raw.slice(0, 10);
+        let formatted = '';
+        if (raw.length <= 2) {
+          formatted = raw;
+        } else if (raw.length <= 4) {
+          formatted = raw.slice(0, 2) + ' ' + raw.slice(2);
+        } else if (raw.length <= 6) {
+          formatted = raw.slice(0, 2) + ' ' + raw.slice(2, 4) + ' ' + raw.slice(4);
+        } else {
+          let state = raw.slice(0, 2);
+          let rto = raw.slice(2, 4);
+          let tail = raw.slice(4);
+          let lettersMatch = tail.match(/^[A-Z]+/);
+          if (lettersMatch) {
+            let series = lettersMatch[0].slice(0, 2);
+            let digits = tail.slice(series.length).slice(0, 4);
+            formatted = `${state} ${rto} ${series}${digits ? ' ' + digits : ''}`;
+          } else {
+            formatted = `${state} ${rto} ${tail.slice(0, 2)} ${tail.slice(2, 6)}`;
+          }
+        }
+        manualPlate.value = formatted.trim();
+      });
     }
 
     const manualForm = document.getElementById('manual-reg-form');

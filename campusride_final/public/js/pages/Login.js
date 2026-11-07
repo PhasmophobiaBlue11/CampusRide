@@ -80,11 +80,11 @@ class LoginPage {
           </div>
 
           <!-- Dedicated Login Form -->
-          <form id="login-form" class="space-y-4">
+          <form id="login-form" class="space-y-4" autocomplete="off">
             <input type="hidden" id="login-target-role" value="${role}" />
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Username</label>
-              <input type="text" id="login-username" required class="cr-input" placeholder="${usernamePlaceholder}" value="" autocomplete="off" spellcheck="false" />
+              <input type="text" id="login-username" required class="cr-input" placeholder="${usernamePlaceholder}" value="" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" />
             </div>
 
             <div>
@@ -93,7 +93,7 @@ class LoginPage {
                 <a href="#/forgot-password" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">Forgot?</a>
               </div>
               <div class="relative flex items-center">
-                <input type="password" id="login-password" required class="cr-input pr-11" placeholder="••••••••" />
+                <input type="password" id="login-password" required class="cr-input pr-11" placeholder="••••••••" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" />
                 <button type="button" id="toggle-login-password" class="absolute right-2.5 p-1 text-base text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none" title="Toggle password visibility">
                   👁️
                 </button>

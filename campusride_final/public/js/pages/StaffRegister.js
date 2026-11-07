@@ -61,27 +61,27 @@ class StaffRegisterPage {
             </p>
           </div>
 
-          <form id="staff-reg-form" class="space-y-4">
+          <form id="staff-reg-form" class="space-y-4" autocomplete="off">
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Full Name (First and Last)</label>
-              <input type="text" id="staff-name" required class="cr-input" placeholder="e.g. Anand Shinde" />
+              <input type="text" id="staff-name" required class="cr-input" placeholder="e.g. Anand Shinde" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
             </div>
 
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Choose Username</label>
-              <input type="text" id="staff-username" required minlength="3" class="cr-input" placeholder="e.g. Anand2026 or staffXYZ" autocomplete="username" />
+              <input type="text" id="staff-username" required minlength="3" class="cr-input" placeholder="e.g. Anand2026 or staffXYZ" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" />
               <p class="text-[10px] text-slate-400 mt-0.5">Used to log in to the Gate Staff App on this device.</p>
             </div>
 
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Mobile Phone (10 Digits)</label>
-              <input type="tel" id="staff-phone" required class="cr-input" placeholder="9876543210" pattern="[0-9]{10}" />
+              <input type="tel" id="staff-phone" required class="cr-input" placeholder="9876543210" pattern="[0-9]{10}" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
             </div>
 
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Password</label>
               <div class="relative flex items-center">
-                <input type="password" id="staff-password" required minlength="6" class="cr-input pr-11" placeholder="••••••••" autocomplete="new-password" />
+                <input type="password" id="staff-password" required minlength="6" class="cr-input pr-11" placeholder="••••••••" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" />
                 <button type="button" id="toggle-staff-password" class="absolute right-2.5 p-1 text-base text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none">
                   👁️
                 </button>

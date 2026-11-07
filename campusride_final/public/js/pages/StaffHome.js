@@ -1,10 +1,37 @@
 // CampusRide — Staff Gate Coordinator Dashboard (§4.1, §8.4)
 class StaffHomePage {
+  // Device-First storage for gate staff
+  static getDeviceStaffData(userId) {
+    if (!userId) return null;
+    try {
+      const d = localStorage.getItem(`campusride_device_staff_data_${userId}`);
+      return d ? JSON.parse(d) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  static saveDeviceStaffData(userId, data) {
+    if (!userId || !data) return;
+    try {
+      localStorage.setItem(`campusride_device_staff_data_${userId}`, JSON.stringify(data));
+    } catch {}
+  }
+
   static async render(user) {
     let logs = [];
     let stats = { entry: 0, exit: 0 };
     let driverCount = 0;
     let parentCount = 0;
+
+    // 1. Instant Device-First Load from phone storage
+    const localData = StaffHomePage.getDeviceStaffData(user.id);
+    if (localData) {
+      logs = localData.logs || [];
+      stats = localData.stats || { entry: 0, exit: 0 };
+      driverCount = localData.driverCount || 0;
+      parentCount = localData.parentCount || 0;
+    }
 
     try {
       const today = new Date().toISOString().slice(0, 10);
@@ -17,7 +44,12 @@ class StaffHomePage {
       stats = logsRes.stats || { entry: 0, exit: 0 };
       driverCount = (dRes.drivers || []).length;
       parentCount = (pRes.parents || []).length;
-    } catch {}
+
+      // Save to this device's storage permanently
+      StaffHomePage.saveDeviceStaffData(user.id, { logs, stats, driverCount, parentCount });
+    } catch {
+      // Offline fallback: already loaded from phone's local storage
+    }
 
     const currentlyInside = Math.max(0, (stats.entry || 0) - (stats.exit || 0));
 

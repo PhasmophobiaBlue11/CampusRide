@@ -166,9 +166,9 @@
     const isStaff = userRole === 'staff';
 
     // Strict Role-Based Routing & App Isolation Guards
-    // 1. Driver App Isolation: Only console, live map & settings allowed
+    // 1. Driver App Isolation: Only console & settings allowed
     if (isDriver) {
-      if (path !== '/' && path !== '' && path !== '/settings' && path !== '/live-map') {
+      if (path !== '/' && path !== '' && path !== '/settings') {
         window.location.hash = '#/';
         return;
       }
@@ -249,8 +249,8 @@
       pageHtml = await window.DriversRegistryPage.render(user);
       attachCallback = () => window.DriversRegistryPage.attachEvents(user);
     } else if (path === '/live-map') {
-      pageHtml = await window.LiveMapPage.render(user);
-      attachCallback = () => window.LiveMapPage.attachEvents(user);
+      window.location.hash = '#/';
+      return;
     } else if (path === '/directories' || path === '/parents') {
       pageHtml = await window.DirectoriesPage.render(user);
       attachCallback = () => window.DirectoriesPage.attachEvents(user);

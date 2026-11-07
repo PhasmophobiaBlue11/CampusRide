@@ -20,21 +20,21 @@ class ForgotPasswordPage {
             </p>
           </div>
 
-          <form id="forgot-form" class="space-y-4">
+          <form id="forgot-form" class="space-y-4" autocomplete="off">
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Your Account Username</label>
-              <input type="text" id="forgot-username" required class="cr-input" placeholder="e.g. your username" autocomplete="username" />
+              <input type="text" id="forgot-username" required class="cr-input" placeholder="e.g. your username" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" />
             </div>
 
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Registered Mobile Phone Number</label>
-              <input type="tel" id="forgot-phone" required class="cr-input" placeholder="10-digit mobile number" pattern="[0-9]{10}" />
+              <input type="tel" id="forgot-phone" required class="cr-input" placeholder="10-digit mobile number" pattern="[0-9]{10}" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
             </div>
 
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Set New Password</label>
               <div class="relative flex items-center">
-                <input type="password" id="forgot-password" required minlength="6" class="cr-input pr-11" placeholder="At least 6 characters" autocomplete="new-password" />
+                <input type="password" id="forgot-password" required minlength="6" class="cr-input pr-11" placeholder="At least 6 characters" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" />
                 <button type="button" id="toggle-forgot-password" class="absolute right-2.5 p-1 text-base text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none">
                   👁️
                 </button>

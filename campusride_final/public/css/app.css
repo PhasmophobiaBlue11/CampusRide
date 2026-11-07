@@ -215,13 +215,13 @@ h1, h2, h3, h4, .font-heading {
   border-radius: 0.625rem;
   cursor: pointer;
   border: none;
-  transition: all 0.15s ease-in-out;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   user-select: none;
   text-decoration: none;
 }
 
 .cr-btn:active {
-  transform: scale(0.98);
+  transform: scale(0.96) !important;
 }
 
 .cr-btn-primary {
@@ -231,8 +231,9 @@ h1, h2, h3, h4, .font-heading {
 }
 
 .cr-btn-primary:hover {
-  filter: brightness(1.1);
-  box-shadow: 0 4px 14px hsla(var(--primary) / 0.45);
+  filter: brightness(1.08);
+  box-shadow: 0 6px 18px hsla(var(--primary) / 0.45);
+  transform: translateY(-1px);
 }
 
 .cr-btn-secondary {
@@ -243,6 +244,7 @@ h1, h2, h3, h4, .font-heading {
 
 .cr-btn-secondary:hover {
   background-color: hsl(var(--muted));
+  transform: translateY(-1px);
 }
 
 .cr-btn-destructive {
@@ -251,7 +253,8 @@ h1, h2, h3, h4, .font-heading {
 }
 
 .cr-btn-destructive:hover {
-  filter: brightness(1.1);
+  filter: brightness(1.08);
+  transform: translateY(-1px);
 }
 
 .cr-btn-ghost {
@@ -263,22 +266,71 @@ h1, h2, h3, h4, .font-heading {
   background-color: hsl(var(--muted));
 }
 
-/* Inputs */
+/* Inputs & Micro-Animations */
 .cr-input {
   width: 100%;
-  padding: 0.7rem 0.95rem;
-  border-radius: 0.55rem;
-  border: 1px solid hsl(var(--border));
+  padding: 0.72rem 1rem;
+  border-radius: 0.65rem;
+  border: 1.5px solid hsl(var(--border));
   background-color: hsl(var(--card));
   color: hsl(var(--foreground));
   font-size: 0.95rem;
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.22s ease,
+              box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.2s ease;
 }
 
 .cr-input:focus {
+  transform: scale(1.01) translateY(-1px);
   border-color: hsl(var(--primary));
-  box-shadow: 0 0 0 3px hsla(var(--primary) / 0.2);
+  box-shadow: 0 0 0 3.5px hsla(var(--primary) / 0.2), 0 8px 18px -4px hsla(var(--primary) / 0.12);
+}
+
+/* Specialized Focus for Password Inputs */
+input[type="password"]:focus,
+input[type="text"][id*="password"]:focus {
+  border-color: hsl(var(--accent));
+  box-shadow: 0 0 0 3.5px hsla(var(--accent) / 0.28), 0 8px 20px -4px hsla(var(--accent) / 0.18);
+}
+
+/* Eye Toggle Micro-Rotation */
+button[id*="toggle-"] {
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+button[id*="toggle-"]:hover {
+  transform: scale(1.22) rotate(-8deg);
+}
+
+button[id*="toggle-"]:active {
+  transform: scale(0.9);
+}
+
+/* Smooth Board & Card Elevation */
+.cr-card {
+  transition: border-color 0.2s ease, box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Radar & Pulse Animations */
+@keyframes smoothPulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.75; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-smooth-pulse {
+  animation: smoothPulse 2s infinite ease-in-out;
+}
+
+@keyframes boardItemIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.board-item-enter {
+  animation: boardItemIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Badges */
