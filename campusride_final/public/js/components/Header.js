@@ -92,10 +92,12 @@ class HeaderComponent {
               </span>
             </button>
 
-            <!-- Emergency Phone Directory CTA -->
-            <button id="header-emergency-btn" class="cr-btn cr-btn-destructive h-7 sm:h-8 px-1.5 sm:px-2.5 text-[11px] flex items-center justify-center gap-1 cursor-pointer shrink-0" title="Emergency Contacts">
-              🚨<span class="hidden sm:inline font-bold">SOS</span>
-            </button>
+            <!-- Emergency Phone Directory CTA (Drivers & Parents Only) -->
+            ${(isDriver || isParent) ? `
+              <button id="header-emergency-btn" class="cr-btn cr-btn-destructive h-7 sm:h-8 px-2 sm:px-2.5 text-[11px] flex items-center justify-center gap-1 cursor-pointer shrink-0 shadow-sm" title="Emergency SOS Contacts">
+                <span>🚨</span><span class="font-bold">SOS</span>
+              </button>
+            ` : ''}
 
             <!-- Logout -->
             <button id="logout-btn" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-slate-600 dark:text-slate-400 hover:text-rose-600 flex items-center justify-center text-xs transition cursor-pointer shrink-0" title="Log Out">
@@ -107,7 +109,7 @@ class HeaderComponent {
     `;
   }
 
-  static attachEvents() {
+  static attachEvents(user) {
     // Language Selector
     const langSelect = document.getElementById('lang-selector');
     if (langSelect) {
@@ -144,10 +146,10 @@ class HeaderComponent {
       alertsBtn.onclick = () => HeaderComponent.openAlertsModal();
     }
 
-    // Emergency Call SOS Drawer
+    // Emergency Call SOS Drawer (Drivers and Parents only)
     const emergencyBtn = document.getElementById('header-emergency-btn');
     if (emergencyBtn) {
-      emergencyBtn.onclick = () => HeaderComponent.openEmergencyModal();
+      emergencyBtn.onclick = () => HeaderComponent.openEmergencyModal(user);
     }
 
     // Logout
@@ -250,74 +252,163 @@ class HeaderComponent {
     };
   }
 
-  static async openEmergencyModal() {
-    let staff = [];
-    let drivers = [];
-    try {
-      const [sRes, dRes] = await Promise.all([
-        window.api.request('/api/directories/staff'),
-        window.api.request('/api/drivers')
-      ]);
-      staff = sRes.staff || [];
-      drivers = dRes.drivers || [];
-    } catch {}
+  static async openEmergencyModal(user) {
+    let modal = document.getElementById('emergency-modal');
+    if (modal) modal.remove();
 
-    const modal = document.createElement('div');
+    let contacts = { gateStaff: [], assignedParents: [], assignedDriver: null, userRole: '' };
+    try {
+      contacts = await window.api.request('/api/emergency-contacts');
+    } catch (err) {
+      console.warn('[SOS Modal] Error loading emergency contacts:', err.message);
+    }
+
+    const isDriver = contacts.userRole === 'driver' || Boolean(user && user.driverProfile);
+    const gateStaff = contacts.gateStaff || [];
+    const assignedParents = contacts.assignedParents || [];
+    const assignedDriver = contacts.assignedDriver;
+
+    modal = document.createElement('div');
     modal.id = 'emergency-modal';
     modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4';
     modal.innerHTML = `
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-fade-in-up">
+        <!-- Emergency Header -->
         <div class="p-4 bg-rose-600 text-white flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <span class="text-2xl">🚨</span>
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl animate-pulse">🚨</span>
             <div>
-              <h3 class="font-bold text-base">Campus Emergency Contacts</h3>
-              <p class="text-xs text-rose-100">Tap to call drivers and gate security instantly</p>
+              <h3 class="font-bold text-base leading-tight">Emergency Assistance SOS</h3>
+              <p class="text-xs text-rose-100 mt-0.5">
+                ${isDriver ? 'Call Gate Staff or Student Parents' : 'Call Van Driver or Gate Staff'}
+              </p>
             </div>
           </div>
-          <button id="close-emergency-modal-btn" class="text-white hover:text-rose-200 text-lg">✕</button>
+          <button id="close-emergency-modal-btn" class="p-1 rounded-lg hover:bg-rose-700 text-white text-lg font-bold cursor-pointer select-none">✕</button>
         </div>
 
-        <div class="p-4 overflow-y-auto space-y-4 flex-1">
-          <div>
-            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Campus Security & Gate Staff</h4>
-            <div class="space-y-2">
-              ${staff.map(s => `
-                <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
-                  <div>
-                    <div class="font-bold text-sm text-slate-800 dark:text-slate-100">${s.full_name}</div>
-                    <div class="text-xs text-slate-500">${s.notes || 'Campus Gate Officer'}</div>
+        <div class="p-4 overflow-y-auto space-y-4 flex-1 text-xs">
+          ${isDriver ? `
+            <!-- DRIVER SOS: 1. All Gate Staff (choose any), 2. Parents of dropped children -->
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <span>🏢</span> <span>Gate Security & Staff (${gateStaff.length})</span>
+                </h4>
+                <span class="text-[10px] text-slate-400">Choose staff to call</span>
+              </div>
+              <div class="space-y-2">
+                ${gateStaff.length === 0 ? `
+                  <div class="p-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 text-center">
+                    No gate staff numbers recorded.
                   </div>
-                  <a href="tel:${s.phone}" class="cr-btn cr-btn-primary py-1 px-3 text-xs bg-emerald-600 hover:bg-emerald-500">
-                    📞 ${s.phone}
-                  </a>
-                </div>
-              `).join('')}
+                ` : gateStaff.map(s => `
+                  <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
+                    <div>
+                      <div class="font-bold text-slate-900 dark:text-white text-sm">${s.full_name}</div>
+                      <div class="text-[11px] text-slate-500">${s.role || 'Gate Security'}</div>
+                    </div>
+                    <a href="tel:${s.phone}" class="cr-btn bg-emerald-600 hover:bg-emerald-500 text-white py-1.5 px-3 text-xs font-bold flex items-center gap-1">
+                      <span>📞</span> <span>Call (${s.phone})</span>
+                    </a>
+                  </div>
+                `).join('')}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Transit Drivers</h4>
-            <div class="space-y-2">
-              ${drivers.map(d => `
-                <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
-                  <div>
-                    <div class="font-bold text-sm text-slate-800 dark:text-slate-100">${d.label} • ${d.driver_name}</div>
-                    <div class="text-xs text-slate-500">${d.van_no}</div>
+            <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <span>👨‍👩‍👧</span> <span>Parents of Children You Drop (${assignedParents.length})</span>
+                </h4>
+                <span class="text-[10px] text-slate-400">Choose parent to call</span>
+              </div>
+              <div class="space-y-2">
+                ${assignedParents.length === 0 ? `
+                  <div class="p-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 text-center">
+                    No student parents currently linked to your van route.
                   </div>
-                  <a href="tel:${d.phone}" class="cr-btn cr-btn-secondary py-1 px-3 text-xs">
-                    📞 ${d.phone || 'Call'}
+                ` : assignedParents.map(p => `
+                  <div class="p-3 rounded-xl border border-indigo-200 dark:border-indigo-950/60 flex items-center justify-between bg-indigo-50/50 dark:bg-indigo-950/20">
+                    <div>
+                      <div class="font-bold text-slate-900 dark:text-white text-sm">${p.parent_name}</div>
+                      <div class="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">Child: <b>${p.child_name}</b></div>
+                    </div>
+                    <a href="tel:${p.parent_phone}" class="cr-btn bg-indigo-600 hover:bg-indigo-500 text-white py-1.5 px-3 text-xs font-bold flex items-center gap-1">
+                      <span>📞</span> <span>Call (${p.parent_phone})</span>
+                    </a>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : `
+            <!-- PARENT SOS: 1. Assigned Van Driver, 2. All Gate Staff (choose any) -->
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <span>🚌</span> <span>Your Assigned Van Driver</span>
+                </h4>
+                <span class="text-[10px] text-slate-400">Direct vehicle line</span>
+              </div>
+              ${assignedDriver ? `
+                <div class="p-3.5 rounded-xl border border-amber-300 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 flex items-center justify-between">
+                  <div>
+                    <div class="font-bold text-slate-900 dark:text-white text-sm">${assignedDriver.driver_name}</div>
+                    <div class="text-[11px] text-amber-700 dark:text-amber-400 font-semibold mt-0.5">
+                      ${assignedDriver.label} • Plate: ${assignedDriver.van_no}
+                    </div>
+                  </div>
+                  <a href="tel:${assignedDriver.phone}" class="cr-btn bg-amber-500 hover:bg-amber-400 text-white py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                    <span>📞</span> <span>Call Driver (${assignedDriver.phone})</span>
                   </a>
                 </div>
-              `).join('')}
+              ` : `
+                <div class="p-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 text-center">
+                  No van driver currently assigned to your child.
+                </div>
+              `}
             </div>
-          </div>
+
+            <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <span>🏢</span> <span>Gate Security & Staff (${gateStaff.length})</span>
+                </h4>
+                <span class="text-[10px] text-slate-400">Choose staff to call</span>
+              </div>
+              <div class="space-y-2">
+                ${gateStaff.length === 0 ? `
+                  <div class="p-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 text-center">
+                    No gate staff numbers recorded.
+                  </div>
+                ` : gateStaff.map(s => `
+                  <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
+                    <div>
+                      <div class="font-bold text-slate-900 dark:text-white text-sm">${s.full_name}</div>
+                      <div class="text-[11px] text-slate-500">${s.role || 'Gate Staff'}</div>
+                    </div>
+                    <a href="tel:${s.phone}" class="cr-btn bg-emerald-600 hover:bg-emerald-500 text-white py-1.5 px-3 text-xs font-bold flex items-center gap-1">
+                      <span>📞</span> <span>Call (${s.phone})</span>
+                    </a>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `}
+        </div>
+
+        <div class="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex justify-end">
+          <button id="dismiss-emergency-modal-btn" class="cr-btn cr-btn-secondary text-xs py-1.5 px-4 cursor-pointer">Close</button>
         </div>
       </div>
     `;
 
     document.body.appendChild(modal);
-    modal.querySelector('#close-emergency-modal-btn').onclick = () => modal.remove();
+    const close = () => modal.remove();
+    const closeBtn = modal.querySelector('#close-emergency-modal-btn');
+    const dismissBtn = modal.querySelector('#dismiss-emergency-modal-btn');
+    if (closeBtn) closeBtn.onclick = close;
+    if (dismissBtn) dismissBtn.onclick = close;
   }
 }
 

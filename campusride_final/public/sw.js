@@ -1,6 +1,6 @@
-// CampusRide — Progressive Web App Service Worker (v6.2)
+// CampusRide — Progressive Web App Service Worker (v6.3)
 // High-Speed App Shell Caching & Cold-Start Masking
-const CACHE_NAME = 'campusride-app-v6.2';
+const CACHE_NAME = 'campusride-app-v6.3';
 
 const PRECACHE_ASSETS = [
   '/',

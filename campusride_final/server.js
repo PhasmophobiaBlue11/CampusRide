@@ -1031,6 +1031,83 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { success: true });
       }
 
+      // EMERGENCY CONTACTS: Role-tailored emergency contacts for SOS (§SOS)
+      if (pathname === '/api/emergency-contacts' && req.method === 'GET') {
+        if (!user) return sendError(res, 401, 'Unauthorized');
+
+        // 1. All Gate Staff members (with phone numbers)
+        const staffRows = db.prepare(`
+          SELECT full_name, phone, 'Gate Security Staff' as role, email as username
+          FROM staff_requests
+          WHERE status = 'approved' AND phone IS NOT NULL AND trim(phone) != ''
+          ORDER BY full_name ASC
+        `).all();
+
+        const adminUsers = db.prepare(`
+          SELECT display_name as full_name, phone, 'Master Administrator' as role, username
+          FROM users
+          WHERE role = 'admin' AND phone IS NOT NULL AND trim(phone) != ''
+        `).all();
+
+        const gateStaff = [...staffRows];
+        for (const adm of adminUsers) {
+          if (!gateStaff.some(s => s.phone === adm.phone || s.username === adm.username)) {
+            gateStaff.push(adm);
+          }
+        }
+
+        const manualStaff = db.prepare(`
+          SELECT driver_name as full_name, phone, 'Campus Staff' as role, '' as username
+          FROM drivers
+          WHERE type = 'staff' AND phone IS NOT NULL AND trim(phone) != ''
+        `).all();
+        for (const ms of manualStaff) {
+          if (!gateStaff.some(s => s.phone === ms.phone)) {
+            gateStaff.push(ms);
+          }
+        }
+
+        let assignedParents = [];
+        let assignedDriver = null;
+
+        // 2. If Driver: parents of children they are dropping
+        if (user.driverProfile) {
+          const vanId = user.driverProfile.selected_van_id || '';
+          const vanLabel = user.driverProfile.selected_van_label || '';
+
+          assignedParents = db.prepare(`
+            SELECT DISTINCT p.name as parent_name, p.phone as parent_phone, c.name as child_name, c.van_label
+            FROM children c
+            JOIN parents p ON c.parent_id = p.user_id
+            WHERE (c.van_id = ? OR c.van_label = ? OR ? IN (SELECT id FROM drivers WHERE label = c.van_label))
+              AND p.phone IS NOT NULL AND trim(p.phone) != ''
+            ORDER BY p.name ASC
+          `).all(vanId, vanLabel, vanId);
+        }
+
+        // 3. If Parent: the driver they have chosen for their children
+        if (user.parentProfile) {
+          assignedDriver = db.prepare(`
+            SELECT d.id, d.label, d.driver_name, d.van_no, d.phone, d.vehicle_type
+            FROM drivers d
+            WHERE d.type = 'van' AND d.phone IS NOT NULL AND trim(d.phone) != '' AND (
+              d.id IN (SELECT van_id FROM children WHERE parent_id = ?)
+              OR d.label IN (SELECT van_label FROM children WHERE parent_id = ?)
+              OR d.id = ?
+              OR d.label = ?
+            )
+            LIMIT 1
+          `).get(user.id, user.id, user.parentProfile.selected_van_id || '', user.parentProfile.selected_van_label || '');
+        }
+
+        return sendJson(res, 200, {
+          gateStaff,
+          assignedParents,
+          assignedDriver,
+          userRole: user.driverProfile ? 'driver' : user.parentProfile ? 'parent' : user.role
+        });
+      }
+
       // GATE SCANNER: Entry / Exit Alternation Check & Log Recording (§7.4)
       if (pathname === '/api/scanner/scan' && req.method === 'POST') {
         if (!user) return sendError(res, 401, 'Unauthorized');

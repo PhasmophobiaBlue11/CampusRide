@@ -104,13 +104,41 @@
       user = await window.api.fetchMe();
       // If token still exists but user is null, server is cold booting (Render free tier wake-up)
       if (!user && window.api.getToken()) {
+        const warmupGradient = activeApp === 'driver' ? 'from-amber-500 to-orange-600 shadow-amber-500/25' :
+                               activeApp === 'parent' ? 'from-indigo-600 to-purple-600 shadow-indigo-500/25' :
+                               activeApp === 'admin' ? 'from-purple-700 to-indigo-700 shadow-purple-500/25' :
+                               'from-blue-700 to-indigo-600 shadow-blue-500/25';
+        const warmupTitle = activeApp === 'driver' ? 'Connecting to Driver Console...' :
+                            activeApp === 'parent' ? 'Connecting to Parent Portal...' :
+                            activeApp === 'admin' ? 'Connecting to Admin Suite...' :
+                            'Connecting to Campus Gate Operations...';
+        const warmupLogo = activeApp === 'driver' ? `
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="15" rx="3"></rect><line x1="3" y1="10" x2="21" y2="10"></line>
+            <circle cx="7.5" cy="19" r="2"></circle><circle cx="16.5" cy="19" r="2"></circle>
+          </svg>
+        ` : activeApp === 'parent' ? `
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+        ` : activeApp === 'admin' ? `
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path>
+          </svg>
+        ` : `
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path>
+          </svg>
+        `;
+
         appEl.innerHTML = `
           <div class="min-h-screen flex flex-col items-center justify-center p-6 text-center space-y-4">
-            <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-700 to-indigo-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/25 animate-pulse text-3xl">
-              🚌
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr ${warmupGradient} flex items-center justify-center text-white shadow-xl animate-pulse">
+              ${warmupLogo}
             </div>
             <div class="space-y-1">
-              <h3 class="font-bold text-slate-900 dark:text-white text-base">Connecting to CampusRide Cloud...</h3>
+              <h3 class="font-bold text-slate-900 dark:text-white text-base">${warmupTitle}</h3>
               <p class="text-xs text-slate-500 dark:text-slate-400">Restoring your transit session. Please hold on...</p>
             </div>
             <div class="w-36 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
@@ -174,9 +202,9 @@
       }
     }
 
-    // 2. Parent App Isolation: Only child tracking, contacts & settings allowed
+    // 2. Parent App Isolation: Only child tracking & settings allowed
     if (isParent) {
-      if (path !== '/' && path !== '' && path !== '/directories' && path !== '/parents' && path !== '/settings') {
+      if (path !== '/' && path !== '' && path !== '/settings') {
         window.location.hash = '#/';
         return;
       }
@@ -291,16 +319,12 @@
         </nav>
       `;
     } else if (isParent) {
-      // 👨‍👩‍👧 Parent App Navigation: Live Van Radar, Helpline, Settings
+      // 👨‍👩‍👧 Parent App Navigation: Live Van Radar, Settings (Helpline removed as per requirement)
       bottomNavHtml = `
-        <nav class="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-6 py-2.5 flex items-center justify-around text-[11px] font-bold text-slate-500 shadow-lg">
+        <nav class="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-10 py-2.5 flex items-center justify-around text-[11px] font-bold text-slate-500 shadow-lg">
           <a href="#/" class="flex flex-col items-center gap-1 ${path === '/' || path === '' ? 'text-indigo-600 dark:text-indigo-400' : 'hover:text-slate-900 dark:hover:text-white'}">
             <span class="text-xl">👨‍👩‍👧</span>
             <span>Van Radar</span>
-          </a>
-          <a href="#/directories" class="flex flex-col items-center gap-1 ${path === '/directories' ? 'text-indigo-600 dark:text-indigo-400' : 'hover:text-slate-900 dark:hover:text-white'}">
-            <span class="text-xl">📞</span>
-            <span>Helpline</span>
           </a>
           <a href="#/settings" class="flex flex-col items-center gap-1 ${path === '/settings' ? 'text-indigo-600 dark:text-indigo-400' : 'hover:text-slate-900 dark:hover:text-white'}">
             <span class="text-xl">⚙️</span>

@@ -48,17 +48,55 @@
 
   <!-- Main SPA Container -->
   <div id="app" class="relative z-10 min-h-screen flex flex-col">
-    <!-- Initial Loading Spinner -->
-    <div class="min-h-screen flex flex-col items-center justify-center space-y-4">
-      <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-700 to-indigo-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/25 animate-bounce">
+    <!-- Initial Loading Spinner with Dynamic Role Logo Detection -->
+    <div id="initial-loader" class="min-h-screen flex flex-col items-center justify-center space-y-4">
+      <div id="initial-loader-icon" class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-700 to-indigo-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/25 animate-bounce">
         <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M8 6v6"></path><path d="M15 6v6"></path><path d="M2 12h19.6"></path>
-          <path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 7.3 19.6 7 19 7H5c-.6 0-1.1.3-1.4.8L2.2 12.8c-.1.4-.2.8-.2 1.2 0 .4.1.8.2 1.2.3 1.1.8 2.8.8 2.8h3"></path>
-          <circle cx="7" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle>
+          <rect x="3" y="4" width="18" height="15" rx="3"></rect>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+          <circle cx="7.5" cy="19" r="2"></circle>
+          <circle cx="16.5" cy="19" r="2"></circle>
         </svg>
       </div>
-      <div class="font-bold text-sm text-slate-500 dark:text-slate-400">Loading CampusRide...</div>
+      <div id="initial-loader-text" class="font-bold text-sm text-slate-700 dark:text-slate-300">Loading CampusRide...</div>
     </div>
+    <script>
+      (function() {
+        try {
+          const host = window.location.hostname.toLowerCase();
+          const path = window.location.pathname.toLowerCase();
+          const hash = window.location.hash.toLowerCase();
+          const savedRole = localStorage.getItem('campusride_app_role');
+          let role = null;
+          if (host.includes('driver') || path.includes('driver') || hash.includes('driver') || savedRole === 'driver') role = 'driver';
+          else if (host.includes('parent') || path.includes('parent') || hash.includes('parent') || savedRole === 'parent') role = 'parent';
+          else if (host.includes('staff') || path.includes('staff') || hash.includes('staff') || savedRole === 'staff') role = 'staff';
+          else if (host.includes('admin') || path.includes('admin') || hash.includes('admin') || savedRole === 'admin') role = 'admin';
+
+          const iconEl = document.getElementById('initial-loader-icon');
+          const textEl = document.getElementById('initial-loader-text');
+          if (iconEl && textEl && role) {
+            if (role === 'driver') {
+              iconEl.className = 'w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-xl shadow-amber-500/25 animate-bounce';
+              iconEl.innerHTML = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="15" rx="3"></rect><line x1="3" y1="10" x2="21" y2="10"></line><circle cx="7.5" cy="19" r="2"></circle><circle cx="16.5" cy="19" r="2"></circle></svg>';
+              textEl.textContent = 'Loading CampusRide Driver App...';
+            } else if (role === 'parent') {
+              iconEl.className = 'w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-xl shadow-indigo-500/25 animate-bounce';
+              iconEl.innerHTML = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>';
+              textEl.textContent = 'Loading CampusRide Parent App...';
+            } else if (role === 'staff') {
+              iconEl.className = 'w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-700 to-indigo-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/25 animate-bounce';
+              iconEl.innerHTML = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>';
+              textEl.textContent = 'Loading CampusRide Gate & Staff Desk...';
+            } else if (role === 'admin') {
+              iconEl.className = 'w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-700 to-indigo-700 flex items-center justify-center text-white shadow-xl shadow-purple-500/25 animate-bounce';
+              iconEl.innerHTML = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>';
+              textEl.textContent = 'Loading CampusRide Master Admin...';
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
   </div>
 
   <!-- Toast Notification Container -->
