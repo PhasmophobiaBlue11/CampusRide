@@ -63,8 +63,9 @@ class DriverRegisterPage {
 
           <form id="driver-reg-form" class="space-y-4" autocomplete="off">
             <div>
-              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Full Driver Name</label>
-              <input type="text" id="driver-name" required class="cr-input" placeholder="e.g. Ramesh Sharma" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
+              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Full Driver Name (First & Last Name)</label>
+              <input type="text" id="driver-name" required class="cr-input" placeholder="e.g. Ramu Chandan" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
+              <p class="text-[10px] text-slate-400 mt-0.5">Please enter both your first name and last name.</p>
             </div>
 
             <div>
@@ -215,6 +216,12 @@ class DriverRegisterPage {
         const vehicleNo = document.getElementById('driver-van-no').value.trim();
         const vehicleType = document.getElementById('driver-vehicle-type').value;
         const submitBtn = document.getElementById('driver-submit-btn');
+
+        // Full Name Validation (Must contain at least first name and last name)
+        const nameParts = fullName.split(/\s+/).filter(Boolean);
+        if (nameParts.length < 2 || nameParts[0].length < 2 || nameParts[1].length < 2) {
+          return window.showToast('Please enter your full name (both first and last name, e.g. Ramu Chandan)', 'error');
+        }
 
         if (!username || username.length < 3) {
           return window.showToast('Username must be at least 3 characters', 'error');

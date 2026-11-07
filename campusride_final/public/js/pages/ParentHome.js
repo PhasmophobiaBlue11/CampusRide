@@ -361,8 +361,14 @@ class ParentHomePage {
       e.preventDefault();
       const name = modal.querySelector('#modal-child-name').value.trim();
       const vanId = modal.querySelector('#modal-child-van').value;
-      const submitBtn = modal.querySelector('#modal-child-submit-btn');
 
+      // Student Full Name Validation
+      const nameParts = name.split(/\s+/).filter(Boolean);
+      if (nameParts.length < 2 || nameParts[0].length < 2 || nameParts[1].length < 2) {
+        return window.showToast('Please enter the student\'s full name (both first and last name, e.g. Rahul Sharma)', 'error');
+      }
+
+      const submitBtn = modal.querySelector('#modal-child-submit-btn');
       submitBtn.disabled = true;
       submitBtn.textContent = 'Saving...';
 

@@ -59,8 +59,9 @@ class ParentRegisterPage {
 
           <form id="parent-reg-form" class="space-y-4" autocomplete="off">
             <div>
-              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Full Parent / Guardian Name</label>
+              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Full Parent / Guardian Name (First & Last Name)</label>
               <input type="text" id="parent-name" required class="cr-input" placeholder="e.g. Priya Sharma" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
+              <p class="text-[10px] text-slate-400 mt-0.5">Please enter both your first name and last name.</p>
             </div>
 
             <div>
@@ -159,6 +160,12 @@ class ParentRegisterPage {
         const phone = document.getElementById('parent-phone').value.trim();
         const password = document.getElementById('parent-password').value;
         const submitBtn = document.getElementById('parent-submit-btn');
+
+        // Full Name Validation (Must contain at least first name and last name)
+        const nameParts = fullName.split(/\s+/).filter(Boolean);
+        if (nameParts.length < 2 || nameParts[0].length < 2 || nameParts[1].length < 2) {
+          return window.showToast('Please enter your full name (both first and last name, e.g. Priya Sharma)', 'error');
+        }
 
         if (!username || username.length < 3) {
           return window.showToast('Username must be at least 3 characters', 'error');

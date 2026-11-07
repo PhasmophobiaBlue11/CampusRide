@@ -713,6 +713,12 @@ const server = http.createServer(async (req, res) => {
         const rawUser = (username || email || '').trim();
         if (!fullName || !rawUser || !phone || !password) return sendError(res, 400, 'All fields (Full Name, Username, Phone, Password) are required');
 
+        // Full Name Validation (Both first and last name required)
+        const nameParts = fullName.trim().split(/\s+/).filter(Boolean);
+        if (nameParts.length < 2 || nameParts[0].length < 2 || nameParts[1].length < 2) {
+          return sendError(res, 400, 'Please enter your full name (both first and last name, e.g. Anand Shinde)');
+        }
+
         if (rawUser.length < 3) return sendError(res, 400, 'Username must be at least 3 characters long');
 
         // Check if username already taken
@@ -744,6 +750,12 @@ const server = http.createServer(async (req, res) => {
         const { fullName, username, email, phone, password, vehicleNo, vehicleType } = await readJsonBody(req);
         const rawUser = (username || email || '').trim();
         if (!fullName || !rawUser || !phone || !password || !vehicleNo) return sendError(res, 400, 'All fields (Full Name, Username, Phone, Password, Vehicle No) are required');
+
+        // Full Name Validation (Both first and last name required, e.g. Ramu Chandan)
+        const nameParts = fullName.trim().split(/\s+/).filter(Boolean);
+        if (nameParts.length < 2 || nameParts[0].length < 2 || nameParts[1].length < 2) {
+          return sendError(res, 400, 'Please enter your full name (both first and last name, e.g. Ramu Chandan)');
+        }
 
         if (rawUser.length < 3) return sendError(res, 400, 'Username must be at least 3 characters long');
 
@@ -787,6 +799,12 @@ const server = http.createServer(async (req, res) => {
         const { fullName, username, email, phone, password, address, lat, lng } = await readJsonBody(req);
         const rawUser = (username || email || '').trim();
         if (!fullName || !rawUser || !phone || !password) return sendError(res, 400, 'All fields (Full Name, Username, Phone, Password) are required');
+
+        // Full Name Validation (Both first and last name required, e.g. Priya Sharma)
+        const nameParts = fullName.trim().split(/\s+/).filter(Boolean);
+        if (nameParts.length < 2 || nameParts[0].length < 2 || nameParts[1].length < 2) {
+          return sendError(res, 400, 'Please enter your full name (both first and last name, e.g. Priya Sharma)');
+        }
 
         if (rawUser.length < 3) return sendError(res, 400, 'Username must be at least 3 characters long');
 
@@ -931,6 +949,12 @@ const server = http.createServer(async (req, res) => {
         if (!user) return sendError(res, 401, 'Unauthorized');
         const { driver_name, van_no, phone, vehicle_type, type } = await readJsonBody(req);
         if (!driver_name || !van_no) return sendError(res, 400, 'Name and vehicle number are required');
+
+        // Full Name Validation
+        const nameParts = driver_name.trim().split(/\s+/).filter(Boolean);
+        if (nameParts.length < 2 || nameParts[0].length < 2 || nameParts[1].length < 2) {
+          return sendError(res, 400, 'Please enter the full name (both first and last name, e.g. Ramesh Sharma)');
+        }
 
         const kind = type === 'staff' ? 'staff' : 'van';
         const label = getNextLabel(kind);
@@ -1439,10 +1463,18 @@ const server = http.createServer(async (req, res) => {
         const count = db.prepare('SELECT count(*) as count FROM children WHERE parent_id = ?').get(user.id).count;
         if (count >= 5) return sendError(res, 400, 'Maximum 5 children allowed per parent account');
 
-        const { name, van_id } = await readJsonBody(req);
-        if (!name || !van_id) return sendError(res, 400, 'Child name and assigned van are required');
+        const { name, van_id, vanId } = await readJsonBody(req);
+        const childName = (name || '').trim();
+        const targetVan = van_id || vanId;
+        if (!childName || !targetVan) return sendError(res, 400, 'Student full name and assigned van are required');
 
-        const van = db.prepare('SELECT label FROM drivers WHERE id = ?').get(van_id);
+        // Full Name Validation for student
+        const nameParts = childName.split(/\s+/).filter(Boolean);
+        if (nameParts.length < 2 || nameParts[0].length < 2 || nameParts[1].length < 2) {
+          return sendError(res, 400, 'Please enter the student\'s full name (both first and last name, e.g. Rahul Sharma)');
+        }
+
+        const van = db.prepare('SELECT label FROM drivers WHERE id = ?').get(targetVan);
         const vanLabel = van ? van.label : 'Van';
         const childId = generateId('ch');
         const now = new Date().toISOString();
@@ -1450,12 +1482,12 @@ const server = http.createServer(async (req, res) => {
         db.prepare(`
           INSERT INTO children (id, parent_id, name, van_id, van_label, created_at)
           VALUES (?, ?, ?, ?, ?, ?)
-        `).run(childId, user.id, name.trim(), van_id, vanLabel, now);
+        `).run(childId, user.id, childName, targetVan, vanLabel, now);
 
         // Auto sync parent's selected van
         db.prepare(`
           UPDATE parents SET selected_van_id = ?, selected_van_label = ? WHERE user_id = ?
-        `).run(van_id, vanLabel, user.id);
+        `).run(targetVan, vanLabel, user.id);
 
         return sendJson(res, 201, { id: childId, name, van_id, vanLabel });
       }

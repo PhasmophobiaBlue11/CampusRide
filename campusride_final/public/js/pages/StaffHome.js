@@ -127,8 +127,8 @@ class StaffHomePage {
           </a>
         </div>
 
-        <!-- Quick Access Feature Grid (4 Single Cards, No Duplicates) -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Quick Access Feature Grid (3 Core Cards) -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <a href="#/entry-exit-scanner" class="cr-card p-5 no-underline text-inherit group hover:border-blue-500 transition">
             <div class="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition">
               📷
@@ -143,14 +143,6 @@ class StaffHomePage {
             </div>
             <h3 class="font-bold text-base text-slate-900 dark:text-white mb-1">Register Driver / Staff</h3>
             <p class="text-xs text-slate-500 dark:text-slate-400">Fill details or scan QR code to issue immediate passes.</p>
-          </a>
-
-          <a href="#/live-map" class="cr-card p-5 no-underline text-inherit group hover:border-indigo-500 transition">
-            <div class="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition">
-              🗺️
-            </div>
-            <h3 class="font-bold text-base text-slate-900 dark:text-white mb-1">Fleet on Google Maps</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400">View real-time fleet GPS coordinates and track on Google Maps.</p>
           </a>
 
           <a href="#/van-register" class="cr-card p-5 no-underline text-inherit group hover:border-amber-500 transition">

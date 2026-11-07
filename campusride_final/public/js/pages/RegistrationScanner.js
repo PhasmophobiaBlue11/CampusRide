@@ -81,8 +81,9 @@ class RegistrationScannerPage {
 
           <form id="manual-reg-form" class="space-y-4" autocomplete="off">
             <div>
-              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Driver / Staff Full Name</label>
+              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Driver / Staff Full Name (First & Last Name)</label>
               <input type="text" id="manual-driver-name" required class="cr-input" placeholder="e.g. Ramesh Sharma" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
+              <p class="text-[10px] text-slate-400 mt-0.5">Please enter both first and last name.</p>
             </div>
 
             <div>
@@ -243,6 +244,12 @@ class RegistrationScannerPage {
         const phone = document.getElementById('manual-driver-phone').value.trim();
         const van_no = document.getElementById('manual-driver-plate').value.trim().toUpperCase();
         const vehicle_type = document.getElementById('manual-driver-veh-type').value;
+
+        // Full Name Validation
+        const nameParts = driver_name.split(/\s+/).filter(Boolean);
+        if (nameParts.length < 2 || nameParts[0].length < 2 || nameParts[1].length < 2) {
+          return window.showToast('Please enter the full name (both first and last name, e.g. Ramesh Sharma)', 'error');
+        }
 
         const btn = document.getElementById('manual-reg-submit-btn');
         btn.disabled = true;

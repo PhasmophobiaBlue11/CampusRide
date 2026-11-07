@@ -231,8 +231,9 @@ class DriversRegistryPage {
         <!-- Mode 1: Manual Form -->
         <form id="add-driver-form" class="space-y-3.5">
           <div>
-            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Name (Driver / Staff)</label>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Full Name (First & Last Name)</label>
             <input type="text" id="new-driver-name" required class="cr-input" placeholder="e.g. Ramesh Sharma" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
+            <p class="text-[10px] text-slate-400 mt-0.5">Please enter both first and last name.</p>
           </div>
 
           <div>
@@ -335,6 +336,12 @@ class DriversRegistryPage {
       const phone = modal.querySelector('#new-driver-phone').value.trim();
       const van_no = modal.querySelector('#new-driver-plate').value.trim().toUpperCase();
       const vehicle_type = modal.querySelector('#new-driver-veh-type').value;
+
+      // Full Name Validation
+      const nameParts = driver_name.split(/\s+/).filter(Boolean);
+      if (nameParts.length < 2 || nameParts[0].length < 2 || nameParts[1].length < 2) {
+        return window.showToast('Please enter the full name (both first and last name, e.g. Ramesh Sharma)', 'error');
+      }
 
       const submitBtn = modal.querySelector('#save-driver-btn');
       submitBtn.disabled = true;
