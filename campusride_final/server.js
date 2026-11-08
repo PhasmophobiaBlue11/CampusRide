@@ -1007,8 +1007,17 @@ const server = http.createServer(async (req, res) => {
         }
 
         saveBackupJson();
-        broadcastEvent('driver_added', { id, label });
-        return sendJson(res, 201, { id, label });
+        broadcastEvent('driver_added', { id, label, driver_name: driver_name.trim(), van_no: roleOrPlate });
+        return sendJson(res, 201, {
+          id,
+          label,
+          driver_name: driver_name.trim(),
+          van_no: roleOrPlate,
+          phone: phone || '',
+          vehicle_type: vehicle_type || (kind === 'staff' ? 'walk_in' : '4_wheeler'),
+          type: kind,
+          created_at: now
+        });
       }
 
       // DRIVERS & STAFF REGISTRY: Delete van or staff (Cascades logs & renumbers as per §7.3)
@@ -1031,28 +1040,66 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { success: true });
       }
 
+      // DRIVERS & STAFF REGISTRY: Bulk-sync / restore from device storage (§Indestructible Staff)
+      if (pathname === '/api/drivers/sync' && req.method === 'POST') {
+        if (!user) return sendError(res, 401, 'Unauthorized');
+        const { staffList } = await readJsonBody(req);
+        if (Array.isArray(staffList)) {
+          const insertStmt = db.prepare(`
+            INSERT OR IGNORE INTO drivers (id, label, type, driver_name, license_number, van_no, phone, vehicle_type, raw_data, created_at)
+            VALUES (?, ?, 'staff', ?, '', ?, ?, ?, ?, ?)
+          `);
+          for (const s of staffList) {
+            if (!s || !s.driver_name) continue;
+            const staffId = s.id || generateId('drv');
+            const existing = db.prepare('SELECT id FROM drivers WHERE id = ?').get(staffId);
+            if (!existing) {
+              const label = s.label || getNextLabel('staff');
+              insertStmt.run(
+                staffId,
+                label,
+                s.driver_name.trim(),
+                s.van_no || 'Staff Pass',
+                s.phone || '',
+                s.vehicle_type || 'walk_in',
+                s.raw_data || `Name: ${s.driver_name}`,
+                s.created_at || new Date().toISOString()
+              );
+            }
+          }
+          saveBackupJson();
+        }
+        const currentStaff = db.prepare("SELECT * FROM drivers WHERE type = 'staff' ORDER BY created_at ASC").all();
+        return sendJson(res, 200, { success: true, staff: currentStaff });
+      }
+
       // EMERGENCY CONTACTS: Role-tailored emergency contacts for SOS (§SOS)
+      // NOTE: Admin is STRICTLY EXCLUDED. Only Gate Staff and Parent/Driver are callable.
       if (pathname === '/api/emergency-contacts' && req.method === 'GET') {
         if (!user) return sendError(res, 401, 'Unauthorized');
 
-        // 1. All Gate Staff members (with phone numbers)
+        // 1. All Gate Staff members (with phone numbers) — Strictly non-admin
         const staffRows = db.prepare(`
           SELECT full_name, phone, 'Gate Security Staff' as role, email as username
           FROM staff_requests
-          WHERE status = 'approved' AND phone IS NOT NULL AND trim(phone) != ''
+          WHERE status = 'approved' AND is_admin = 0 AND lower(email) != 'admin2026'
+            AND phone IS NOT NULL AND trim(phone) != ''
           ORDER BY full_name ASC
         `).all();
 
-        const adminUsers = db.prepare(`
-          SELECT display_name as full_name, phone, 'Master Administrator' as role, username
+        // Also include any staff users from users table if not already in staffRows (strictly non-admin)
+        const staffUsers = db.prepare(`
+          SELECT display_name as full_name, phone, 'Gate Security Staff' as role, username
           FROM users
-          WHERE role = 'admin' AND phone IS NOT NULL AND trim(phone) != ''
+          WHERE role = 'staff' AND phone IS NOT NULL AND trim(phone) != '' AND lower(username) != 'admin2026'
         `).all();
 
-        const gateStaff = [...staffRows];
-        for (const adm of adminUsers) {
-          if (!gateStaff.some(s => s.phone === adm.phone || s.username === adm.username)) {
-            gateStaff.push(adm);
+        const gateStaff = [];
+        for (const s of [...staffRows, ...staffUsers]) {
+          if (s.username && s.username.toLowerCase() === 'admin2026') continue;
+          if (s.role && s.role.toLowerCase().includes('admin')) continue;
+          if (!gateStaff.some(item => item.phone === s.phone || (item.username && item.username === s.username))) {
+            gateStaff.push(s);
           }
         }
 
@@ -1062,6 +1109,7 @@ const server = http.createServer(async (req, res) => {
           WHERE type = 'staff' AND phone IS NOT NULL AND trim(phone) != ''
         `).all();
         for (const ms of manualStaff) {
+          if (ms.role && ms.role.toLowerCase().includes('admin')) continue;
           if (!gateStaff.some(s => s.phone === ms.phone)) {
             gateStaff.push(ms);
           }

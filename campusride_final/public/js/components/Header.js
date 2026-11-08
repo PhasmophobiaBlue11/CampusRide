@@ -264,7 +264,12 @@ class HeaderComponent {
     }
 
     const isDriver = contacts.userRole === 'driver' || Boolean(user && user.driverProfile);
-    const gateStaff = contacts.gateStaff || [];
+    // Strictly exclude admin from emergency contacts (§SOS)
+    const gateStaff = (contacts.gateStaff || []).filter(s => {
+      const role = (s.role || '').toLowerCase();
+      const username = (s.username || '').toLowerCase();
+      return !role.includes('admin') && username !== 'admin2026';
+    });
     const assignedParents = contacts.assignedParents || [];
     const assignedDriver = contacts.assignedDriver;
 

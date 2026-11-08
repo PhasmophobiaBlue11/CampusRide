@@ -11,6 +11,20 @@ class DirectoriesPage {
     let parents = [];
     let staff = [];
 
+    // Load persistent staff and deletion tombstones from local device storage
+    let localStaff = [];
+    let deletedStaffIds = new Set();
+    try {
+      const stored = localStorage.getItem('campusride_persistent_staff_registry');
+      if (stored) localStaff = JSON.parse(stored);
+      const delStored = localStorage.getItem('campusride_deleted_staff_ids');
+      if (delStored) deletedStaffIds = new Set(JSON.parse(delStored));
+    } catch (e) {
+      localStaff = [];
+      deletedStaffIds = new Set();
+    }
+    localStaff = (Array.isArray(localStaff) ? localStaff : []).filter(s => s && s.id && !deletedStaffIds.has(s.id));
+
     try {
       const [allDriversRes, pRes] = await Promise.all([
         window.api.request('/api/drivers'),
@@ -23,8 +37,40 @@ class DirectoriesPage {
         const numB = parseInt((b.label || '').replace(/\D/g, ''), 10) || 0;
         return numA - numB;
       });
+
+      // Server staff (filter out any locally deleted tombstones)
+      const serverStaff = allDrivers.filter(d => d.type === 'staff' && !deletedStaffIds.has(d.id));
+
+      // Indestructible Sync Check:
+      // If the device has staff that the server is missing (e.g. fresh Render container or deployment),
+      // merge immediately so the user never sees them disappear, and sync them back to the server.
+      const missingOnServer = localStaff.filter(ls => !serverStaff.some(ss => ss.id === ls.id));
+      if (missingOnServer.length > 0) {
+        window.api.request('/api/drivers/sync', {
+          method: 'POST',
+          body: JSON.stringify({ staffList: missingOnServer })
+        }).catch(err => console.warn('[Directories] Background staff sync notice:', err.message));
+
+        const mergedMap = new Map();
+        for (const s of [...serverStaff, ...missingOnServer]) {
+          if (!deletedStaffIds.has(s.id)) {
+            mergedMap.set(s.id, s);
+          }
+        }
+        staff = Array.from(mergedMap.values());
+      } else {
+        staff = serverStaff;
+      }
+
+      // Keep device storage synchronized with current valid staff
+      const registryMap = new Map();
+      for (const s of localStaff) registryMap.set(s.id, s);
+      for (const s of staff) registryMap.set(s.id, s);
+      const updatedRegistry = Array.from(registryMap.values()).filter(s => !deletedStaffIds.has(s.id));
+      localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(updatedRegistry));
+
       // Personally added staff: Staff 1, Staff 2, ...
-      staff = allDrivers.filter(d => d.type === 'staff').sort((a, b) => {
+      staff.sort((a, b) => {
         const numA = parseInt((a.label || '').replace(/\D/g, ''), 10) || 0;
         const numB = parseInt((b.label || '').replace(/\D/g, ''), 10) || 0;
         return numA - numB;
@@ -32,6 +78,8 @@ class DirectoriesPage {
       parents = pRes.parents || [];
     } catch (err) {
       console.warn('[Directories] Fetch error:', err.message);
+      // Offline fallback: Use local persistent staff
+      staff = localStaff;
     }
 
     const hash = (window.location.hash || '').toLowerCase();
@@ -390,6 +438,27 @@ class DirectoriesPage {
                 body: JSON.stringify({ text: qrText, type: 'staff' })
               });
 
+              // Instantly persist in device storage so it survives redeployments
+              try {
+                const currentReg = JSON.parse(localStorage.getItem('campusride_persistent_staff_registry') || '[]');
+                const newMember = {
+                  id: res.id,
+                  label: res.label,
+                  driver_name: res.driver_name,
+                  van_no: res.van_no || 'Staff Pass',
+                  phone: res.phone || '',
+                  vehicle_type: 'walk_in',
+                  type: 'staff',
+                  created_at: new Date().toISOString()
+                };
+                if (!currentReg.some(s => s.id === res.id)) {
+                  currentReg.push(newMember);
+                  localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(currentReg));
+                }
+                const delIds = JSON.parse(localStorage.getItem('campusride_deleted_staff_ids') || '[]').filter(id => id !== res.id);
+                localStorage.setItem('campusride_deleted_staff_ids', JSON.stringify(delIds));
+              } catch (e) {}
+
               window.showToast(`✅ Staff member "${res.driver_name}" added successfully as ${res.label}!`, 'success');
 
               // Refresh Staff Directory View
@@ -440,6 +509,27 @@ class DirectoriesPage {
             })
           });
 
+          // Instantly persist in device storage so it survives redeployments
+          try {
+            const currentReg = JSON.parse(localStorage.getItem('campusride_persistent_staff_registry') || '[]');
+            const newMember = {
+              id: res.id,
+              label: res.label,
+              driver_name: res.driver_name || name,
+              van_no: res.van_no || 'Staff Pass',
+              phone: res.phone || '',
+              vehicle_type: 'walk_in',
+              type: 'staff',
+              created_at: res.created_at || new Date().toISOString()
+            };
+            if (!currentReg.some(s => s.id === res.id)) {
+              currentReg.push(newMember);
+              localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(currentReg));
+            }
+            const delIds = JSON.parse(localStorage.getItem('campusride_deleted_staff_ids') || '[]').filter(id => id !== res.id);
+            localStorage.setItem('campusride_deleted_staff_ids', JSON.stringify(delIds));
+          } catch (e) {}
+
           window.showToast(`Staff member "${name}" successfully registered as ${res.label}!`, 'success');
           closeModal();
 
@@ -471,6 +561,16 @@ class DirectoriesPage {
 
         try {
           await window.api.request(`/api/drivers/${id}`, { method: 'DELETE' });
+
+          // Remove from device storage and mark ID as explicitly deleted
+          try {
+            const currentReg = JSON.parse(localStorage.getItem('campusride_persistent_staff_registry') || '[]').filter(s => s.id !== id);
+            localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(currentReg));
+            const delIds = JSON.parse(localStorage.getItem('campusride_deleted_staff_ids') || '[]');
+            if (!delIds.includes(id)) delIds.push(id);
+            localStorage.setItem('campusride_deleted_staff_ids', JSON.stringify(delIds));
+          } catch (e) {}
+
           window.showToast(`Staff pass for "${name}" removed.`, 'success');
 
           // Refresh page view maintaining the Staff tab

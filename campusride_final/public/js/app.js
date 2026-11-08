@@ -188,6 +188,12 @@
     // Set active app role in storage to match the user's logged-in identity
     localStorage.setItem('campusride_app_role', userRole);
 
+    // Indestructible Staff Registry Auto-Sync:
+    // If device holds personally added staff passes, ensure server and database are synced
+    if (typeof window.syncPersistentStaffRegistry === 'function') {
+      window.syncPersistentStaffRegistry();
+    }
+
     const isDriver = userRole === 'driver';
     const isParent = userRole === 'parent';
     const isAdmin = userRole === 'admin';
@@ -403,6 +409,27 @@
     }
   }
 }
+
+  // Background helper to ensure persistent staff passes stored on user's device survive server redeployments (§Indestructible Staff)
+  window.syncPersistentStaffRegistry = async function() {
+    try {
+      const raw = localStorage.getItem('campusride_persistent_staff_registry');
+      if (!raw) return;
+      const localStaff = JSON.parse(raw);
+      if (!Array.isArray(localStaff) || localStaff.length === 0) return;
+      const deletedArr = JSON.parse(localStorage.getItem('campusride_deleted_staff_ids') || '[]');
+      const deletedSet = new Set(deletedArr);
+      const validStaff = localStaff.filter(s => s && s.id && !deletedSet.has(s.id));
+      if (validStaff.length === 0) return;
+
+      await window.api.request('/api/drivers/sync', {
+        method: 'POST',
+        body: JSON.stringify({ staffList: validStaff })
+      });
+    } catch (e) {
+      // Non-blocking background sync
+    }
+  };
 
   function initApp() {
     if (window.LanguageGate) window.LanguageGate.check();
