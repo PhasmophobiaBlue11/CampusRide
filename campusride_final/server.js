@@ -862,6 +862,73 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { user });
       }
 
+      // AUTH: Update Profile (Full Name, Phone, Password — Username CANNOT be edited)
+      if (pathname === '/api/auth/profile' && req.method === 'PUT') {
+        if (!user) return sendError(res, 401, 'Unauthorized');
+        const { fullName, phone, newPassword } = await readJsonBody(req);
+
+        let updatedName = user.display_name;
+        if (fullName !== undefined) {
+          const trimmed = (fullName || '').trim();
+          if (trimmed) {
+            const parts = trimmed.split(/\s+/).filter(Boolean);
+            if (parts.length < 2 || parts[0].length < 2 || parts[1].length < 2) {
+              return sendError(res, 400, 'Please enter full name (both first and last name, e.g. Ramu Chandan)');
+            }
+            updatedName = trimmed;
+          }
+        }
+
+        let updatedPhone = user.phone || '';
+        if (phone !== undefined) {
+          updatedPhone = (phone || '').trim();
+        }
+
+        let updatedHash = null;
+        if (newPassword && typeof newPassword === 'string' && newPassword.trim().length > 0) {
+          if (newPassword.trim().length < 6) {
+            return sendError(res, 400, 'New password must be at least 6 characters');
+          }
+          updatedHash = hashPassword(newPassword.trim());
+        }
+
+        // Update users table (Username is strictly protected and never modified)
+        if (updatedHash) {
+          db.prepare('UPDATE users SET display_name = ?, phone = ?, password_hash = ? WHERE id = ?')
+            .run(updatedName, updatedPhone, updatedHash, user.id);
+        } else {
+          db.prepare('UPDATE users SET display_name = ?, phone = ? WHERE id = ?')
+            .run(updatedName, updatedPhone, user.id);
+        }
+
+        // Cascade updates to role-specific tables:
+        // A. Driver
+        if (user.driverProfile) {
+          db.prepare('UPDATE driver_profiles SET name = ?, phone = ? WHERE user_id = ?')
+            .run(updatedName, updatedPhone, user.id);
+          const vanId = user.driverProfile.selected_van_id;
+          if (vanId) {
+            db.prepare('UPDATE drivers SET driver_name = ?, phone = ? WHERE id = ?')
+              .run(updatedName, updatedPhone, vanId);
+          }
+        }
+
+        // B. Parent
+        if (user.parentProfile) {
+          db.prepare('UPDATE parents SET name = ?, phone = ? WHERE user_id = ?')
+            .run(updatedName, updatedPhone, user.id);
+        }
+
+        // C. Staff
+        db.prepare('UPDATE staff_requests SET full_name = ?, phone = ? WHERE user_id = ? OR lower(email) = lower(?)')
+          .run(updatedName, updatedPhone, user.id, user.username || user.email);
+
+        saveBackupJson();
+
+        const refreshed = getUserProfile(user.id);
+        return sendJson(res, 200, { success: true, user: refreshed });
+      }
+
       // AUTH: Forgot Password (Simulated secure token)
       if (pathname === '/api/auth/forgot-password' && req.method === 'POST') {
         // Return generic success to avoid email leaking
@@ -1038,6 +1105,42 @@ const server = http.createServer(async (req, res) => {
         saveBackupJson();
         broadcastEvent('driver_deleted', { driverId, type: driver.type });
         return sendJson(res, 200, { success: true });
+      }
+
+      // DRIVERS & STAFF REGISTRY: Edit driver or staff member
+      if (pathname.startsWith('/api/drivers/') && req.method === 'PUT') {
+        if (!user) return sendError(res, 401, 'Unauthorized');
+        const driverId = pathname.split('/')[3];
+        const existing = db.prepare('SELECT * FROM drivers WHERE id = ?').get(driverId);
+        if (!existing) return sendError(res, 404, 'Driver or staff member not found');
+
+        const { driver_name, phone, van_no } = await readJsonBody(req);
+        let updatedName = existing.driver_name;
+        if (driver_name !== undefined) {
+          const trimmed = (driver_name || '').trim();
+          if (trimmed) {
+            const parts = trimmed.split(/\s+/).filter(Boolean);
+            if (parts.length < 2 || parts[0].length < 2 || parts[1].length < 2) {
+              return sendError(res, 400, 'Please enter full name (both first and last name, e.g. Ramu Chandan)');
+            }
+            updatedName = trimmed;
+          }
+        }
+
+        const updatedPhone = phone !== undefined ? (phone || '').trim() : (existing.phone || '');
+        const updatedVanNo = van_no !== undefined ? (van_no || '').trim() : (existing.van_no || 'Staff Pass');
+
+        db.prepare(`
+          UPDATE drivers 
+          SET driver_name = ?, phone = ?, van_no = ?, raw_data = ?
+          WHERE id = ?
+        `).run(updatedName, updatedPhone, updatedVanNo, `Name: ${updatedName}`, driverId);
+
+        saveBackupJson();
+        broadcastEvent('driver_updated', { id: driverId, label: existing.label, driver_name: updatedName });
+
+        const updated = db.prepare('SELECT * FROM drivers WHERE id = ?').get(driverId);
+        return sendJson(res, 200, { success: true, driver: updated });
       }
 
       // DRIVERS & STAFF REGISTRY: Bulk-sync / restore from device storage (§Indestructible Staff)

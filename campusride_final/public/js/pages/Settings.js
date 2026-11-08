@@ -41,6 +41,68 @@ class SettingsPage {
           </div>
         </div>
 
+        <!-- Account Profile & Security Settings (§Editable Profile: Name, Phone, Password — Username Locked) -->
+        <div class="cr-card p-6 space-y-4">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+            <h2 class="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+              <span>👤</span> Profile & Security Settings
+            </h2>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 uppercase">
+              ${user.role === 'admin' ? 'Master Administrator' : user.driverProfile ? 'Transport Driver' : user.parentProfile ? 'Student Parent' : 'Campus Staff'}
+            </span>
+          </div>
+
+          <form id="settings-profile-form" class="space-y-4">
+            <!-- 1. Username: STRICTLY READ-ONLY (Cannot be edited by anyone) -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 flex items-center justify-between">
+                <span>Account Username</span>
+                <span class="text-[10px] text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1">
+                  <span>🔒</span> Cannot be changed
+                </span>
+              </label>
+              <div class="relative">
+                <input type="text" value="${user.username || user.email || ''}" disabled readonly class="cr-input bg-slate-100 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-mono text-sm cursor-not-allowed select-none pl-9 font-bold" />
+                <span class="absolute left-3 top-2.5 text-slate-400">🔒</span>
+              </div>
+              <p class="text-[10px] text-slate-400 mt-1">Your username is permanently linked to your system records and login identity.</p>
+            </div>
+
+            <!-- 2. Full Name: EDITABLE -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Full Name <span class="text-rose-500">*</span>
+              </label>
+              <input type="text" id="settings-name-input" value="${user.display_name || ''}" required class="cr-input font-semibold text-sm" placeholder="e.g. Ramesh Sharma" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
+              <p class="text-[10px] text-slate-400 mt-1">Both first name and last name are required (e.g. Ramesh Sharma).</p>
+            </div>
+
+            <!-- 3. Phone Number: EDITABLE -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Registered Phone Number
+              </label>
+              <input type="tel" id="settings-phone-input" value="${user.phone || ''}" class="cr-input font-mono text-sm" placeholder="e.g. 9876543210" autocomplete="off" />
+              <p class="text-[10px] text-slate-400 mt-1">Used for emergency contacts, SOS line, and password resets.</p>
+            </div>
+
+            <!-- 4. Password: EDITABLE -->
+            <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Change Password (Optional)
+              </label>
+              <input type="password" id="settings-new-password-input" class="cr-input text-sm" placeholder="Enter new password (leave blank to keep current)" autocomplete="new-password" />
+              <p class="text-[10px] text-slate-400 mt-1">Leave blank to keep your current password intact. Minimum 6 characters if changing.</p>
+            </div>
+
+            <div class="pt-2">
+              <button type="submit" id="settings-save-profile-btn" class="cr-btn cr-btn-primary text-xs py-2.5 px-6 font-bold shadow-md cursor-pointer flex items-center gap-1.5">
+                <span>💾</span> <span>Save Profile Changes</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
         <!-- Parent Address & Live GPS Location Update (§7.13) -->
         ${isParent ? `
           <div class="cr-card p-6 space-y-4">
@@ -93,7 +155,7 @@ class SettingsPage {
     `;
   }
 
-  static attachEvents() {
+  static attachEvents(user) {
     // Language buttons
     document.querySelectorAll('.settings-lang-btn').forEach(btn => {
       btn.onclick = () => {
@@ -102,6 +164,74 @@ class SettingsPage {
         window.location.reload();
       };
     });
+
+    // Editable Profile Form (Name, Phone, Password — Username Locked)
+    const profileForm = document.getElementById('settings-profile-form');
+    if (profileForm) {
+      profileForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fullName = (document.getElementById('settings-name-input').value || '').trim();
+        const phone = (document.getElementById('settings-phone-input').value || '').trim();
+        const newPassword = (document.getElementById('settings-new-password-input').value || '').trim();
+        const saveBtn = document.getElementById('settings-save-profile-btn');
+
+        // Full Name Validation (Both first and last name required, e.g. Ramesh Sharma)
+        const parts = fullName.split(/\s+/).filter(Boolean);
+        if (parts.length < 2 || parts[0].length < 2 || parts[1].length < 2) {
+          window.showToast('Please enter full name (both first and last name, e.g. Ramesh Sharma)', 'error');
+          return;
+        }
+
+        if (newPassword && newPassword.length < 6) {
+          window.showToast('New password must be at least 6 characters long', 'error');
+          return;
+        }
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving Profile Changes...';
+
+        try {
+          const res = await window.api.request('/api/auth/profile', {
+            method: 'PUT',
+            body: JSON.stringify({
+              fullName,
+              phone,
+              newPassword: newPassword || undefined
+            })
+          });
+
+          if (window.api && window.api.fetchMe) {
+            await window.api.fetchMe();
+          }
+
+          window.showToast('✅ Profile information updated successfully!', 'success');
+
+          const pwdInput = document.getElementById('settings-new-password-input');
+          if (pwdInput) pwdInput.value = '';
+
+          // Re-render settings screen with updated user object
+          const updatedUser = res.user || user;
+          const appEl = document.getElementById('app');
+          if (appEl && window.HeaderComponent) {
+            appEl.innerHTML = `
+              ${window.HeaderComponent.render(updatedUser)}
+              <main class="pb-24 sm:pb-12">
+                ${await SettingsPage.render(updatedUser)}
+              </main>
+            `;
+            window.HeaderComponent.attachEvents(updatedUser);
+            SettingsPage.attachEvents(updatedUser);
+          }
+        } catch (err) {
+          window.showToast(err.message || 'Failed to update profile', 'error');
+        } finally {
+          if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<span>💾</span> <span>Save Profile Changes</span>';
+          }
+        }
+      };
+    }
 
     // Re-detect Live GPS in Settings
     const detectGpsBtn = document.getElementById('settings-detect-gps-btn');

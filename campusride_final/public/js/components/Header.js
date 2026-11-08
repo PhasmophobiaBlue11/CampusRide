@@ -99,6 +99,11 @@ class HeaderComponent {
               </button>
             ` : ''}
 
+            <!-- Settings & Profile -->
+            <a href="#/settings" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center text-xs transition cursor-pointer shrink-0" title="Settings & Profile">
+              ⚙️
+            </a>
+
             <!-- Logout -->
             <button id="logout-btn" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-slate-600 dark:text-slate-400 hover:text-rose-600 flex items-center justify-center text-xs transition cursor-pointer shrink-0" title="Log Out">
               🚪

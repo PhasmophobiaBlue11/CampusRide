@@ -81,6 +81,8 @@ class DirectoriesPage {
       // Offline fallback: Use local persistent staff
       staff = localStaff;
     }
+    DirectoriesPage.currentDrivers = drivers;
+    DirectoriesPage.currentStaff = staff;
 
     const hash = (window.location.hash || '').toLowerCase();
     let initialTab = DirectoriesPage.currentTab;
@@ -186,13 +188,18 @@ class DirectoriesPage {
 
         <!-- 2. DRIVERS DIRECTORY (NO ADD OPTION — Drivers automatically added upon registration as Van 1, Van 2, ...) -->
         <div id="grid-drivers" class="${initialTab === 'drivers' ? '' : 'hidden '}space-y-4 animate-fade-in-up">
-          <div class="flex items-center justify-between pb-1 border-b border-slate-200 dark:border-slate-800">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-200 dark:border-slate-800">
             <div>
               <h2 class="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                 <span>🚌 Registered Transport Drivers (${drivers.length})</span>
               </h2>
               <p class="text-[11px] text-slate-400 mt-0.5">Drivers are automatically added with sequential Van names upon account creation.</p>
             </div>
+            ${drivers.length > 0 ? `
+              <button type="button" id="dir-print-all-drivers-btn" class="cr-btn cr-btn-secondary text-xs py-2 px-3.5 shadow-sm flex items-center gap-1.5 cursor-pointer">
+                <span>🖨️</span> <span>Print All Driver QRs</span>
+              </button>
+            ` : ''}
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -248,8 +255,13 @@ class DirectoriesPage {
               </h2>
               <p class="text-[11px] text-slate-400 mt-0.5">Campus helpers, attendants, and non-gate staff passes.</p>
             </div>
-            <!-- Dual Add Options: Scan QR & Add Staff by Name -->
-            <div class="flex items-center gap-2 self-start sm:self-auto">
+            <!-- Dual Add Options & Print All Staff QRs -->
+            <div class="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+              ${staff.length > 0 ? `
+                <button type="button" id="dir-print-all-staff-btn" class="cr-btn cr-btn-secondary text-xs py-2 px-3 shadow-sm flex items-center gap-1.5 cursor-pointer">
+                  <span>🖨️</span> <span>Print All Staff QRs</span>
+                </button>
+              ` : ''}
               <button type="button" id="open-scan-staff-qr-btn" class="cr-btn cr-btn-secondary text-xs py-2 px-3 shadow-sm flex items-center gap-1.5 cursor-pointer">
                 <span>📷</span> <span>Scan QR</span>
               </button>
@@ -287,13 +299,17 @@ class DirectoriesPage {
                   </div>
                 </div>
 
-                <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+                <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1.5">
                   ${s.phone ? `
-                    <a href="tel:${s.phone}" class="cr-btn bg-emerald-600 hover:bg-emerald-500 text-white flex-1 py-1.5 text-xs text-center font-bold">
-                      📞 Call Staff
+                    <a href="tel:${s.phone}" class="cr-btn bg-emerald-600 hover:bg-emerald-500 text-white py-1.5 px-2.5 text-xs text-center font-bold">
+                      📞 Call
                     </a>
                   ` : ''}
-                  <button type="button" class="dir-view-staff-pass-btn cr-btn cr-btn-secondary flex-1 py-1.5 text-xs text-center cursor-pointer select-none"
+                  <button type="button" class="dir-edit-staff-btn cr-btn cr-btn-secondary flex-1 py-1.5 text-xs text-center font-bold cursor-pointer select-none"
+                          data-id="${s.id}" data-label="${s.label}" data-name="${s.driver_name}" data-phone="${s.phone || ''}">
+                    ✏️ Edit
+                  </button>
+                  <button type="button" class="dir-view-staff-pass-btn cr-btn cr-btn-secondary flex-1 py-1.5 text-xs text-center font-bold cursor-pointer select-none"
                           data-id="${s.id}" data-label="${s.label}" data-name="${s.driver_name}" data-plate="Staff Pass" data-phone="${s.phone || ''}">
                     🎟️ View Pass
                   </button>
@@ -335,6 +351,49 @@ class DirectoriesPage {
                 </button>
                 <button type="submit" id="submit-add-staff-btn" class="cr-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 px-4 font-bold shadow-md cursor-pointer">
                   ➕ Add Staff Member
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- MODAL: EDIT STAFF PERSONALLY -->
+        <div id="edit-staff-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden items-center justify-center p-4">
+          <div class="cr-card max-w-md w-full p-6 space-y-4 shadow-2xl animate-fade-in-up border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">✏️</span>
+                <h3 class="font-bold text-base text-slate-900 dark:text-white">Edit Staff Member</h3>
+                <span id="edit-staff-label-badge" class="text-xs font-black px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300"></span>
+              </div>
+              <button type="button" id="close-edit-staff-modal-btn" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-lg font-bold cursor-pointer select-none">
+                ✕
+              </button>
+            </div>
+
+            <form id="edit-staff-form" class="space-y-4">
+              <input type="hidden" id="edit-staff-id" />
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Staff Full Name <span class="text-rose-500">*</span>
+                </label>
+                <input type="text" id="edit-staff-name" required class="cr-input text-base font-semibold" placeholder="e.g. Ramu Chandan" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
+                <p class="text-[10px] text-slate-400 mt-1">Full name requires both first and last name.</p>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Phone Number (Optional)
+                </label>
+                <input type="tel" id="edit-staff-phone" class="cr-input font-mono" placeholder="e.g. 9876543210" autocomplete="off" />
+              </div>
+
+              <div class="pt-2 flex items-center justify-end gap-2">
+                <button type="button" id="cancel-edit-staff-btn" class="cr-btn cr-btn-secondary text-xs py-2 px-3.5 cursor-pointer">
+                  Cancel
+                </button>
+                <button type="submit" id="submit-edit-staff-btn" class="cr-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 px-4 font-bold shadow-md cursor-pointer">
+                  💾 Save Changes
                 </button>
               </div>
             </form>
@@ -603,6 +662,126 @@ class DirectoriesPage {
         }
       };
     });
+
+    // Bulk Print QRs for Drivers (Max 6 per A4 sheet)
+    const printDriversBtn = document.getElementById('dir-print-all-drivers-btn');
+    if (printDriversBtn) {
+      printDriversBtn.onclick = () => {
+        if (!window.printBulkPasses) {
+          return window.showToast('Printing component not loaded.', 'error');
+        }
+        window.printBulkPasses('CampusRide — Transport Drivers Passes', DirectoriesPage.currentDrivers || []);
+      };
+    }
+
+    // Bulk Print QRs for Staff (Max 6 per A4 sheet)
+    const printStaffBtn = document.getElementById('dir-print-all-staff-btn');
+    if (printStaffBtn) {
+      printStaffBtn.onclick = () => {
+        if (!window.printBulkPasses) {
+          return window.showToast('Printing component not loaded.', 'error');
+        }
+        window.printBulkPasses('CampusRide — Personally Added Staff Passes', DirectoriesPage.currentStaff || []);
+      };
+    }
+
+    // Edit Staff Modal Controls & Submission
+    const editModal = document.getElementById('edit-staff-modal');
+    const closeEditBtn = document.getElementById('close-edit-staff-modal-btn');
+    const cancelEditBtn = document.getElementById('cancel-edit-staff-btn');
+    const editForm = document.getElementById('edit-staff-form');
+
+    const closeEditModal = () => {
+      if (editModal) {
+        editModal.classList.add('hidden');
+        editModal.classList.remove('flex');
+        if (editForm) editForm.reset();
+      }
+    };
+
+    if (closeEditBtn) closeEditBtn.onclick = closeEditModal;
+    if (cancelEditBtn) cancelEditBtn.onclick = closeEditModal;
+
+    document.querySelectorAll('.dir-edit-staff-btn').forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.getAttribute('data-id');
+        const name = btn.getAttribute('data-name') || '';
+        const phone = btn.getAttribute('data-phone') || '';
+        const label = btn.getAttribute('data-label') || '';
+
+        document.getElementById('edit-staff-id').value = id;
+        document.getElementById('edit-staff-name').value = name;
+        document.getElementById('edit-staff-phone').value = phone;
+        const badge = document.getElementById('edit-staff-label-badge');
+        if (badge) badge.textContent = label;
+
+        if (editModal) {
+          editModal.classList.remove('hidden');
+          editModal.classList.add('flex');
+          const nameInput = document.getElementById('edit-staff-name');
+          if (nameInput) setTimeout(() => nameInput.focus(), 50);
+        }
+      };
+    });
+
+    if (editForm) {
+      editForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('edit-staff-id').value;
+        const name = (document.getElementById('edit-staff-name').value || '').trim();
+        const phone = (document.getElementById('edit-staff-phone').value || '').trim();
+        const submitBtn = document.getElementById('submit-edit-staff-btn');
+
+        const parts = name.split(/\s+/).filter(Boolean);
+        if (parts.length < 2 || parts[0].length < 2 || parts[1].length < 2) {
+          window.showToast('Please enter full name (both first and last name, e.g. Ramu Chandan)', 'error');
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving...';
+
+        try {
+          await window.api.request(`/api/drivers/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              driver_name: name,
+              phone: phone
+            })
+          });
+
+          // Update local persistent device storage
+          try {
+            const currentReg = JSON.parse(localStorage.getItem('campusride_persistent_staff_registry') || '[]');
+            const idx = currentReg.findIndex(s => s.id === id);
+            if (idx !== -1) {
+              currentReg[idx].driver_name = name;
+              currentReg[idx].phone = phone;
+              localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(currentReg));
+            }
+          } catch (e) {}
+
+          window.showToast(`Staff info for "${name}" updated successfully!`, 'success');
+          closeEditModal();
+
+          // Refresh Staff Directory view
+          DirectoriesPage.currentTab = 'staff';
+          const appEl = document.getElementById('app');
+          appEl.innerHTML = `
+            ${window.HeaderComponent.render(user)}
+            <main class="pb-24 sm:pb-12">
+              ${await DirectoriesPage.render(user)}
+            </main>
+          `;
+          window.HeaderComponent.attachEvents(user);
+          DirectoriesPage.attachEvents(user);
+        } catch (err) {
+          window.showToast(err.message || 'Failed to update staff info', 'error');
+          submitBtn.disabled = false;
+          submitBtn.textContent = '💾 Save Changes';
+        }
+      };
+    }
   }
 }
 

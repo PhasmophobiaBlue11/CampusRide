@@ -86,6 +86,244 @@ window.attachPlateFormatter = function(inputEl) {
 
 window.QRUtils = QRUtils;
 
+// Single Pass Print Helper (Prints ONLY QR, Name, and Number — No extra text)
+window.printSinglePass = function({ label, name, number, id }) {
+  const driverId = id || label;
+  const payload = `CAMPUSRIDE:DRIVER:${driverId}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=2&data=${encodeURIComponent(payload)}`;
+  const printWin = window.open('', '_blank', 'width=500,height=600');
+  if (!printWin) {
+    window.print();
+    return;
+  }
+  printWin.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Pass - ${name}</title>
+      <style>
+        @page { size: auto; margin: 15mm; }
+        body {
+          margin: 0;
+          padding: 20px;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #fff;
+          color: #0f172a;
+        }
+        .pass-card {
+          border: 2px dashed #64748b;
+          border-radius: 16px;
+          padding: 24px;
+          text-align: center;
+          width: 280px;
+          box-sizing: border-box;
+        }
+        .pass-card img {
+          width: 200px;
+          height: 200px;
+          display: block;
+          margin: 0 auto 14px auto;
+        }
+        .pass-name {
+          font-size: 20px;
+          font-weight: 800;
+          margin: 0 0 6px 0;
+          color: #0f172a;
+        }
+        .pass-num {
+          font-size: 15px;
+          font-weight: 700;
+          color: #334155;
+          margin: 0;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="pass-card">
+        <img src="${qrUrl}" alt="QR" onload="window.print();" />
+        <div class="pass-name">${name}</div>
+        <div class="pass-num">${number}</div>
+      </div>
+    </body>
+    </html>
+  `);
+  printWin.document.close();
+};
+
+// Bulk Pass Print Helper (Prints all driver/staff QRs, maximum 6 QRs per A4 sheet)
+window.printBulkPasses = function(title, passList) {
+  if (!Array.isArray(passList) || passList.length === 0) {
+    if (window.showToast) window.showToast('No passes to print.', 'error');
+    return;
+  }
+
+  // Chunk passes into maximum 6 passes per A4 page (§A4 6-per-page format)
+  const pageSize = 6;
+  const pages = [];
+  for (let i = 0; i < passList.length; i += pageSize) {
+    pages.push(passList.slice(i, i + pageSize));
+  }
+
+  const printWin = window.open('', '_blank', 'width=850,height=900');
+  if (!printWin) {
+    alert('Please allow popups to open the print layout.');
+    return;
+  }
+
+  let pagesHtml = '';
+  pages.forEach((pageItems) => {
+    let cardsHtml = '';
+    pageItems.forEach(item => {
+      const driverId = item.id || item.label;
+      const payload = `CAMPUSRIDE:DRIVER:${driverId}`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=2&data=${encodeURIComponent(payload)}`;
+      const name = item.driver_name || 'Staff Member';
+      const number = item.label + (item.van_no && item.van_no !== 'Staff Pass' ? ' • ' + item.van_no : '');
+
+      cardsHtml += `
+        <div class="qr-card">
+          <img src="${qrUrl}" alt="QR" />
+          <div class="qr-name">${name}</div>
+          <div class="qr-num">${number}</div>
+        </div>
+      `;
+    });
+
+    pagesHtml += `
+      <div class="a4-page">
+        ${cardsHtml}
+      </div>
+    `;
+  });
+
+  printWin.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>${title} (${passList.length} Total)</title>
+      <style>
+        @page {
+          size: A4 portrait;
+          margin: 10mm;
+        }
+        * {
+          box-sizing: border-box;
+        }
+        body {
+          margin: 0;
+          padding: 0;
+          background: #f8fafc;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          color: #0f172a;
+        }
+        .print-toolbar {
+          position: sticky;
+          top: 0;
+          background: #1e293b;
+          color: #fff;
+          padding: 12px 20px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          z-index: 100;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .print-btn {
+          background: #10b981;
+          color: #fff;
+          border: none;
+          padding: 8px 18px;
+          border-radius: 8px;
+          font-weight: 700;
+          font-size: 14px;
+          cursor: pointer;
+        }
+        .print-btn:hover {
+          background: #059669;
+        }
+        .a4-page {
+          width: 190mm;
+          min-height: 277mm;
+          max-height: 277mm;
+          margin: 15px auto;
+          background: #fff;
+          box-shadow: 0 0 10px rgba(0,0,0,0.1);
+          padding: 6mm;
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          grid-template-rows: repeat(3, 1fr);
+          gap: 6mm;
+          page-break-after: always;
+          break-after: page;
+        }
+        .a4-page:last-child {
+          page-break-after: auto;
+          break-after: auto;
+        }
+        .qr-card {
+          border: 1.5px dashed #94a3b8;
+          border-radius: 12px;
+          padding: 10px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          background: #fff;
+        }
+        .qr-card img {
+          width: 140px;
+          height: 140px;
+          display: block;
+          margin: 0 auto 6px auto;
+        }
+        .qr-name {
+          font-size: 15px;
+          font-weight: 800;
+          color: #0f172a;
+          margin: 2px 0;
+          line-height: 1.2;
+        }
+        .qr-num {
+          font-size: 13px;
+          font-weight: 700;
+          color: #475569;
+          margin-top: 2px;
+        }
+        @media print {
+          body {
+            background: #fff;
+          }
+          .print-toolbar {
+            display: none !important;
+          }
+          .a4-page {
+            margin: 0 !important;
+            padding: 4mm !important;
+            box-shadow: none !important;
+            width: 100% !important;
+            height: 100% !important;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="print-toolbar">
+        <div>
+          <b>${title}</b> — ${passList.length} Passes (${pages.length} A4 Pages, max 6 per page)
+        </div>
+        <button class="print-btn" onclick="window.print()">🖨️ Print All Passes</button>
+      </div>
+      ${pagesHtml}
+    </body>
+    </html>
+  `);
+  printWin.document.close();
+};
+
 // Global QR Modal Helper for Driver / Staff Pass
 window.showDriverPassQRModal = function({ id, label, name, plate, phone }) {
   const driverId = id || label;
@@ -93,44 +331,40 @@ window.showDriverPassQRModal = function({ id, label, name, plate, phone }) {
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=2&data=${encodeURIComponent(payload)}`;
 
   const isRawId = (str) => typeof str === 'string' && (str.startsWith('drv_') || str.startsWith('usr_') || str.startsWith('id_') || str.length > 25);
-  const cleanLabel = (label && !isRawId(label)) ? label : 'Campus Pass';
-  const cleanName = (name && !isRawId(name)) ? name : 'Campus Driver';
-  const cleanPlate = (plate && !isRawId(plate)) ? plate : 'Official Vehicle Pass';
+  const cleanLabel = (label && !isRawId(label)) ? label : '';
+  const cleanName = (name && !isRawId(name)) ? name : 'Campus Member';
+  const cleanPlate = (plate && !isRawId(plate) && plate !== 'Staff Pass') ? plate : '';
+  const numberText = cleanLabel + (cleanPlate ? ` • ${cleanPlate}` : '');
 
   const modal = document.createElement('div');
   modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4';
   modal.innerHTML = `
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-sm shadow-2xl p-6 space-y-4 text-center animate-fade-in-up">
       <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-        <span class="text-xs font-black px-2.5 py-1 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300">${cleanLabel}</span>
-        <button id="close-qr-pass-modal" class="text-slate-400 hover:text-slate-600 text-xl font-bold cursor-pointer">✕</button>
+        <span class="text-xs font-black px-2.5 py-1 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300">${cleanLabel || 'QR Pass'}</span>
+        <button id="close-qr-pass-modal" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-xl font-bold cursor-pointer">✕</button>
       </div>
 
-      <div class="py-1">
-        <div class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Gate Entry & Exit Pass</div>
-        <h3 class="text-lg font-black text-slate-900 dark:text-white mt-0.5">${cleanName}</h3>
-        <div class="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">${cleanPlate}</div>
+      <!-- Minimalist Pass Content: Only QR, Name, and Number -->
+      <div id="printable-pass-card" class="p-4 bg-white rounded-2xl border-2 border-dashed border-slate-300 text-slate-900 space-y-3 max-w-[260px] mx-auto">
+        <img src="${qrUrl}" width="200" height="200" alt="QR Pass" class="rounded-xl shadow-sm mx-auto block" />
+        <div>
+          <div class="text-base font-black text-slate-900">${cleanName}</div>
+          <div class="text-xs font-mono font-bold text-slate-700 mt-0.5">${numberText}</div>
+        </div>
       </div>
 
-      <!-- Rendered QR Code (No ID printed below) -->
-      <div class="flex flex-col items-center justify-center p-4 bg-white rounded-2xl shadow-inner border border-slate-200 max-w-[240px] mx-auto">
-        <img src="${qrUrl}" width="200" height="200" alt="QR Pass" class="rounded-xl shadow-sm mx-auto" />
-        <div class="text-[11px] font-semibold text-emerald-600 mt-2 flex items-center justify-center gap-1">✓ Authorized Campus Gate Pass</div>
-      </div>
-
-      <p class="text-xs text-slate-500 dark:text-slate-400">
-        Gate security scans this QR pass to record authorized campus entry and exit.
-      </p>
-
-      <button id="print-qr-pass-btn" class="cr-btn cr-btn-primary w-full py-2.5 text-xs font-bold cursor-pointer">
-        🖨️ Print Pass Card
+      <button id="print-qr-pass-btn" class="cr-btn cr-btn-primary w-full py-2.5 text-xs font-bold cursor-pointer shadow-md flex items-center justify-center gap-1.5">
+        <span>🖨️</span> <span>Print Pass</span>
       </button>
     </div>
   `;
 
   document.body.appendChild(modal);
   modal.querySelector('#close-qr-pass-modal').onclick = () => modal.remove();
-  modal.querySelector('#print-qr-pass-btn').onclick = () => window.print();
+  modal.querySelector('#print-qr-pass-btn').onclick = () => {
+    window.printSinglePass({ label: cleanLabel, name: cleanName, number: numberText, id: driverId });
+  };
 };
 
 window.qrPayload = {
