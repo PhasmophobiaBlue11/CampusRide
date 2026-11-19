@@ -143,8 +143,8 @@ function restoreBackupJson() {
 function ensurePermanentAdmin() {
   const now = new Date().toISOString();
 
-  // Ensure Admin2026 always exists and cannot be lost
-  const existing = db.prepare('SELECT id FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)').get(PERMANENT_ADMIN_USERNAME, PERMANENT_ADMIN_USERNAME);
+  // Ensure Master Administrator exists and is always active
+  const existing = db.prepare("SELECT id, username FROM users WHERE role = 'admin' OR id = 'usr_perm_admin' OR lower(username) = lower(?)").get(PERMANENT_ADMIN_USERNAME);
   if (!existing) {
     db.prepare(`
       INSERT INTO users (id, username, email, password_hash, role, display_name, phone, blocked, created_at)
@@ -152,11 +152,25 @@ function ensurePermanentAdmin() {
     `).run('usr_perm_admin', PERMANENT_ADMIN_USERNAME, PERMANENT_ADMIN_USERNAME, hashPassword(PERMANENT_ADMIN_PASSWORD), now);
     console.log(`[CampusRide] Master Administrator created: username="${PERMANENT_ADMIN_USERNAME}", password="${PERMANENT_ADMIN_PASSWORD}"`);
   } else {
-    db.prepare(`
-      UPDATE users SET username = ?, email = ?, role = 'admin', blocked = 0, password_hash = ? WHERE id = ?
-    `).run(PERMANENT_ADMIN_USERNAME, PERMANENT_ADMIN_USERNAME, hashPassword(PERMANENT_ADMIN_PASSWORD), existing.id);
-    console.log(`[CampusRide] Master Administrator active: username="${PERMANENT_ADMIN_USERNAME}"`);
+    // Keep active and admin role without overwriting updated custom credentials
+    db.prepare(`UPDATE users SET role = 'admin', blocked = 0 WHERE id = ?`).run(existing.id);
+    console.log(`[CampusRide] Master Administrator active: username="${existing.username}"`);
   }
+}
+
+// Phone number normalization helper for recovery & authentication
+function normalizePhone(p) {
+  if (!p) return '';
+  const digits = String(p).replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+  if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1);
+  return digits;
+}
+
+function phonesMatch(dbPhone, inputPhone) {
+  const n1 = normalizePhone(dbPhone);
+  const n2 = normalizePhone(inputPhone);
+  return Boolean(n1 && n2 && (n1 === n2 || n1.endsWith(n2) || n2.endsWith(n1)));
 }
 
 function initDatabase() {
@@ -837,30 +851,92 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 201, { token, user: profile, message: 'Parent account created successfully!' });
       }
 
-      // AUTH: Forgot Password (Reset via Username + Registered Phone Number)
+      // AUTH: Forgot Password (Phone Number + Username + New Password) — For Every Role
       if (pathname === '/api/auth/forgot-password' && req.method === 'POST') {
         const { username, phone, newPassword } = await readJsonBody(req);
         if (!username || !phone || !newPassword) {
-          return sendError(res, 400, 'Username, registered phone number, and new password are required');
+          return sendError(res, 400, 'Registered phone number, username, and new password are required');
         }
 
         const cleanUser = username.trim().toLowerCase();
-        const cleanPhone = phone.trim();
+        const inputPhone = phone.trim();
 
-        if (cleanUser === PERMANENT_ADMIN_USERNAME.toLowerCase()) {
-          return sendError(res, 403, 'Master Administrator password cannot be reset via this form.');
+        if (newPassword.length < 4) {
+          return sendError(res, 400, 'New password must be at least 4 characters long');
         }
 
-        const foundUser = db.prepare('SELECT * FROM users WHERE (lower(username) = ? OR lower(email) = ?) AND phone = ?').get(cleanUser, cleanUser, cleanPhone);
+        const foundUser = db.prepare('SELECT * FROM users WHERE lower(username) = ? OR lower(email) = ?').get(cleanUser, cleanUser);
         if (!foundUser) {
-          return sendError(res, 404, 'No account found matching this username and phone number combination.');
+          return sendError(res, 404, 'No account found matching this username.');
+        }
+
+        if (!phonesMatch(foundUser.phone, inputPhone)) {
+          return sendError(res, 400, 'The phone number provided does not match the registered phone for this username.');
         }
 
         const newHash = hashPassword(newPassword);
         db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, foundUser.id);
-        console.log(`[CampusRide] Password reset for user: ${foundUser.username || foundUser.email}`);
+        console.log(`[CampusRide] Password reset for user: ${foundUser.username || foundUser.email} (${foundUser.role})`);
         saveBackupJson();
         return sendJson(res, 200, { success: true, message: 'Password reset successfully! Please sign in with your new password.' });
+      }
+
+      // AUTH: Forgot Username (Password + Phone Number + New Username) — For Every Role
+      if (pathname === '/api/auth/forgot-username' && req.method === 'POST') {
+        const { phone, password, newUsername } = await readJsonBody(req);
+        if (!phone || !password || !newUsername) {
+          return sendError(res, 400, 'Registered phone number, current password, and new username are required');
+        }
+
+        const inputPhone = phone.trim();
+        const cleanNewUser = newUsername.trim();
+
+        if (cleanNewUser.length < 3) {
+          return sendError(res, 400, 'New username must be at least 3 characters long');
+        }
+        if (/\s/.test(cleanNewUser)) {
+          return sendError(res, 400, 'Username cannot contain spaces. Use letters, numbers, underscores, or hyphens.');
+        }
+
+        // Check if new username is already taken by another account
+        const existing = db.prepare('SELECT id FROM users WHERE lower(username) = ? OR lower(email) = ?').get(cleanNewUser.toLowerCase(), cleanNewUser.toLowerCase());
+
+        // Find candidate users by phone number
+        const allUsers = db.prepare("SELECT * FROM users WHERE phone IS NOT NULL AND trim(phone) != ''").all();
+        const candidates = allUsers.filter(u => phonesMatch(u.phone, inputPhone));
+
+        if (candidates.length === 0) {
+          return sendError(res, 404, 'No registered account found with this phone number.');
+        }
+
+        let verifiedUser = null;
+        const inputHash = hashPassword(password);
+        for (const u of candidates) {
+          if (u.password_hash === inputHash) {
+            verifiedUser = u;
+            break;
+          }
+        }
+
+        if (!verifiedUser) {
+          return sendError(res, 401, 'Incorrect password for this phone number. Please check your credentials.');
+        }
+
+        if (existing && existing.id !== verifiedUser.id) {
+          return sendError(res, 400, `The username "${cleanNewUser}" is already taken by another user. Please choose a different username.`);
+        }
+
+        // Update username in users table
+        db.prepare('UPDATE users SET username = ?, email = ? WHERE id = ?').run(cleanNewUser, cleanNewUser, verifiedUser.id);
+        db.prepare('UPDATE staff_requests SET email = ? WHERE user_id = ?').run(cleanNewUser, verifiedUser.id);
+
+        console.log(`[CampusRide] Username recovered/updated for user ID ${verifiedUser.id} (${verifiedUser.role}): "${cleanNewUser}"`);
+        saveBackupJson();
+        return sendJson(res, 200, {
+          success: true,
+          newUsername: cleanNewUser,
+          message: `Username successfully updated to "${cleanNewUser}"! Please sign in with your new username.`
+        });
       }
 
       // AUTH: Current User Profile

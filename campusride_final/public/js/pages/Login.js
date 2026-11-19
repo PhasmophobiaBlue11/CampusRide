@@ -83,14 +83,17 @@ class LoginPage {
           <form id="login-form" class="space-y-4" autocomplete="off">
             <input type="hidden" id="login-target-role" value="${role}" />
             <div>
-              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Username</label>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Username</label>
+                <a href="#/forgot-username${role ? '?role=' + role : ''}" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">Forgot?</a>
+              </div>
               <input type="text" id="login-username" required class="cr-input" placeholder="${usernamePlaceholder}" value="" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" />
             </div>
 
             <div>
               <div class="flex items-center justify-between mb-1">
                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Password</label>
-                <a href="#/forgot-password" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">Forgot?</a>
+                <a href="#/forgot-password${role ? '?role=' + role : ''}" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">Forgot?</a>
               </div>
               <div class="relative flex items-center">
                 <input type="password" id="login-password" required class="cr-input pr-11" placeholder="••••••••" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" />

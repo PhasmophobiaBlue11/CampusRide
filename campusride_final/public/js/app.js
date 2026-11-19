@@ -18,6 +18,16 @@
 
   const appEl = document.getElementById('app');
 
+  // Global GoBack handler for all pages
+  window.goBack = function() {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      const roleParam = new URLSearchParams(window.location.hash.split('?')[1] || '').get('role') || localStorage.getItem('campusride_app_role') || '';
+      window.location.hash = roleParam ? `#/${roleParam}` : '#/';
+    }
+  };
+
   function detectAppRole() {
     // 0. Hard lock from dedicated HTML wrapper (driver.html, parent.html, staff.html, admin.html)
     if (window.CAMPUSRIDE_LOCKED_ROLE) return window.CAMPUSRIDE_LOCKED_ROLE;
@@ -79,6 +89,12 @@
         if (path === '/forgot-password') {
           appEl.innerHTML = window.ForgotPasswordPage.render();
           window.ForgotPasswordPage.attachEvents();
+          if (window.i18n) window.i18n.translateDOM();
+          return;
+        }
+        if (path === '/forgot-username') {
+          appEl.innerHTML = window.ForgotUsernamePage.render();
+          window.ForgotUsernamePage.attachEvents();
           if (window.i18n) window.i18n.translateDOM();
           return;
         }
@@ -176,6 +192,12 @@
     if (path === '/forgot-password') {
       appEl.innerHTML = window.ForgotPasswordPage.render();
       window.ForgotPasswordPage.attachEvents();
+      if (window.i18n) window.i18n.translateDOM();
+      return;
+    }
+    if (path === '/forgot-username') {
+      appEl.innerHTML = window.ForgotUsernamePage.render();
+      window.ForgotUsernamePage.attachEvents();
       if (window.i18n) window.i18n.translateDOM();
       return;
     }
