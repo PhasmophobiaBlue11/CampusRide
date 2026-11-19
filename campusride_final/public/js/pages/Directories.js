@@ -180,10 +180,6 @@ class DirectoriesPage {
                       <span class="text-slate-400">Child:</span>
                       <b>${p.children_names || '—'}</b>
                     </div>
-                    <div class="text-slate-500 flex items-center gap-1.5 truncate" title="${p.address || ''}">
-                      <span class="text-slate-400">Location:</span>
-                      <span class="truncate">${p.address || 'Live GPS Coordinates'}</span>
-                    </div>
                   </div>
                 </div>
 

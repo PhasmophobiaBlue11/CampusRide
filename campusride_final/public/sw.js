@@ -1,6 +1,6 @@
-// CampusRide — Progressive Web App Service Worker (v7.2)
+// CampusRide — Progressive Web App Service Worker (v7.3)
 // High-Speed App Shell Caching & Instant Cold-Start Masking
-const CACHE_NAME = 'campusride-app-v7.2';
+const CACHE_NAME = 'campusride-app-v7.3';
 
 const PRECACHE_ASSETS = [
   '/',
@@ -9,31 +9,37 @@ const PRECACHE_ASSETS = [
   '/parent.html',
   '/staff.html',
   '/admin.html',
+  '/favicon.svg',
+  '/favicon.ico',
+  '/assets/icon-192.png',
+  '/assets/icon-512.png',
+  '/assets/favicon-32x32.png',
+  '/assets/favicon-16x16.png',
   '/css/app.css',
   '/manifest.json',
-  '/js/sounds.js?v=5.2',
-  '/js/i18n.js?v=5.2',
-  '/js/api.js?v=5.2',
-  '/js/qr.js?v=5.2',
-  '/js/components/Header.js?v=5.2',
-  '/js/components/LanguageGate.js?v=5.2',
-  '/js/pages/Login.js?v=5.2',
-  '/js/pages/StaffRegister.js?v=5.2',
-  '/js/pages/DriverRegister.js?v=5.2',
-  '/js/pages/ParentRegister.js?v=5.2',
-  '/js/pages/ForgotPassword.js?v=5.2',
-  '/js/pages/AdminDashboard.js?v=5.2',
-  '/js/pages/StaffHome.js?v=5.2',
-  '/js/pages/EntryExitScanner.js?v=5.2',
-  '/js/pages/RegistrationScanner.js?v=5.2',
-  '/js/pages/VanRegister.js?v=5.2',
-  '/js/pages/DriversRegistry.js?v=5.2',
-  '/js/pages/DriverHome.js?v=5.2',
-  '/js/pages/ParentHome.js?v=5.2',
-  '/js/pages/Directories.js?v=5.2',
-  '/js/pages/WorkingStaff.js?v=5.2',
-  '/js/pages/Settings.js?v=5.2',
-  '/js/app.js?v=5.2'
+  '/js/sounds.js?v=5.3',
+  '/js/i18n.js?v=5.3',
+  '/js/api.js?v=5.3',
+  '/js/qr.js?v=5.3',
+  '/js/components/Header.js?v=5.3',
+  '/js/components/LanguageGate.js?v=5.3',
+  '/js/pages/Login.js?v=5.3',
+  '/js/pages/StaffRegister.js?v=5.3',
+  '/js/pages/DriverRegister.js?v=5.3',
+  '/js/pages/ParentRegister.js?v=5.3',
+  '/js/pages/ForgotPassword.js?v=5.3',
+  '/js/pages/AdminDashboard.js?v=5.3',
+  '/js/pages/StaffHome.js?v=5.3',
+  '/js/pages/EntryExitScanner.js?v=5.3',
+  '/js/pages/RegistrationScanner.js?v=5.3',
+  '/js/pages/VanRegister.js?v=5.3',
+  '/js/pages/DriversRegistry.js?v=5.3',
+  '/js/pages/DriverHome.js?v=5.3',
+  '/js/pages/ParentHome.js?v=5.3',
+  '/js/pages/Directories.js?v=5.3',
+  '/js/pages/WorkingStaff.js?v=5.3',
+  '/js/pages/Settings.js?v=5.3',
+  '/js/app.js?v=5.3'
 ];
 
 self.addEventListener('install', (e) => {

@@ -47,18 +47,6 @@
   ],
   "drivers": [
     {
-      "id": "drv_ee90dd302b792ff6",
-      "label": "Staff 1",
-      "type": "staff",
-      "driver_name": "Ginzy Cherlan",
-      "license_number": "",
-      "van_no": "STAFF PASS",
-      "phone": "",
-      "vehicle_type": "walk_in",
-      "raw_data": "Name: Ginzy Cherlan",
-      "created_at": "2026-11-08T05:37:14.421Z"
-    },
-    {
       "id": "drv_van_9986abb8c2b46701",
       "label": "Van 1",
       "type": "van",
@@ -69,6 +57,18 @@
       "vehicle_type": "4_wheeler",
       "raw_data": "Name: Ramesh Sharma, Van: MH 31 DC 9122",
       "created_at": "2026-11-07T08:35:00.000Z"
+    },
+    {
+      "id": "drv_ee90dd302b792ff6",
+      "label": "Staff 1",
+      "type": "staff",
+      "driver_name": "Ginzy Cherlan",
+      "license_number": "",
+      "van_no": "STAFF PASS",
+      "phone": "",
+      "vehicle_type": "walk_in",
+      "raw_data": "Name: Ginzy Cherlan",
+      "created_at": "2026-11-08T05:37:14.421Z"
     },
     {
       "id": "drv_9a57219d3bb8b3a0",
