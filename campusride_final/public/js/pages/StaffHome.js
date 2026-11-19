@@ -121,22 +121,19 @@ class StaffHomePage {
               <div>
                 <div class="flex items-center gap-2">
                   <h3 class="font-bold text-base text-slate-900 dark:text-white">Campus Directory</h3>
-                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300">
-                    ${driverCount + parentCount + staffCount} Total
-                  </span>
                 </div>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   Browse registered Parents, transport Drivers, and personally added Staff passes.
                 </p>
                 <div class="flex items-center gap-3 mt-2 text-xs font-semibold">
                   <span class="text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-                    <span>👨‍👩‍👧</span> ${parentCount} Parents
+                    <span>👨‍👩‍👧</span> Parents
                   </span>
                   <span class="text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                    <span>🚌</span> ${driverCount} Drivers
+                    <span>🚌</span> Drivers
                   </span>
                   <span class="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                    <span>👔</span> ${staffCount} Staff
+                    <span>👔</span> Staff
                   </span>
                 </div>
               </div>
@@ -147,8 +144,8 @@ class StaffHomePage {
           </a>
         </div>
 
-        <!-- Quick Access Feature Grid (4 Core Cards: Pass Scanner, My Gate Pass, Working Staffs, Daily Log Register) -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Quick Access Feature Grid (3 Core Cards: Pass Scanner, Working Staffs, Daily Log Register) -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <a href="#/entry-exit-scanner" class="cr-card p-5 no-underline text-inherit group hover:border-blue-500 transition">
             <div class="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition">
               📷
@@ -156,14 +153,6 @@ class StaffHomePage {
             <h3 class="font-bold text-base text-slate-900 dark:text-white mb-1">Pass Scanner</h3>
             <p class="text-xs text-slate-500 dark:text-slate-400">Scan driver and staff pass QRs with auto-alternation check.</p>
           </a>
-
-          <button type="button" id="staff-show-my-pass-btn" class="cr-card p-5 no-underline text-left text-inherit group hover:border-emerald-500 transition cursor-pointer select-none">
-            <div class="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition">
-              🎟️
-            </div>
-            <h3 class="font-bold text-base text-slate-900 dark:text-white mb-1">My Gate Pass</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400">Display your personal entry/exit pass QR code.</p>
-          </button>
 
           <a href="#/working-staff" class="cr-card p-5 no-underline text-inherit group hover:border-emerald-500 transition">
             <div class="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition">
@@ -315,22 +304,6 @@ class StaffHomePage {
       btnStaff.onclick = () => {
         updateBtns(btnStaff);
         if (tbody) tbody.innerHTML = StaffHomePage.renderDashboardRows(StaffHomePage.dashboardLogs, 'staff');
-      };
-    }
-
-    const myPassBtn = document.getElementById('staff-show-my-pass-btn');
-    if (myPassBtn) {
-      myPassBtn.onclick = () => {
-        if (typeof window.showPassModal === 'function') {
-          window.showPassModal({
-            id: user.id,
-            label: 'Staff Pass',
-            name: user.display_name || user.email,
-            plate: 'Gate Security',
-            phone: user.phone || '',
-            type: 'staff'
-          });
-        }
       };
     }
   }

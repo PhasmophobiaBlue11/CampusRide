@@ -50,17 +50,13 @@ class DirectoriesPage {
         staff = localStaff;
       }
 
-      // Deduplicate staff list by ID and normalized Name to guarantee no duplicate cards or count inflation
+      // Deduplicate staff list strictly by ID (ensuring all 103 unique staff members are preserved)
       const seenStaffIds = new Set();
-      const seenStaffNames = new Set();
       staff = staff.filter(s => {
         if (!s) return false;
         const sId = String(s.id || '').trim();
-        const sName = String(s.driver_name || '').trim().toLowerCase();
         if (sId && seenStaffIds.has(sId)) return false;
-        if (sName && seenStaffNames.has(sName)) return false;
         if (sId) seenStaffIds.add(sId);
-        if (sName) seenStaffNames.add(sName);
         return true;
       });
 
@@ -111,21 +107,18 @@ class DirectoriesPage {
           </div>
         </div>
 
-        <!-- 3 Dedicated Options Tabs (Parents, Drivers, Staff) -->
+        <!-- 3 Dedicated Options Tabs (Parents, Drivers, Staff) — No Number Badges -->
         <div class="grid grid-cols-3 gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl max-w-xl shadow-inner">
-          <button type="button" id="dir-tab-parents" class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 ${initialTab === 'parents' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
+          <button type="button" id="dir-tab-parents" class="py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer select-none flex items-center justify-center gap-1.5 ${initialTab === 'parents' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
             <span>👨‍👩‍👧 Parents</span>
-            <span class="text-[11px] font-mono px-2 py-0.5 rounded-full ${initialTab === 'parents' ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'}">${parents.length}</span>
           </button>
 
-          <button type="button" id="dir-tab-drivers" class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 ${initialTab === 'drivers' ? 'bg-amber-500 text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
+          <button type="button" id="dir-tab-drivers" class="py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer select-none flex items-center justify-center gap-1.5 ${initialTab === 'drivers' ? 'bg-amber-500 text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
             <span>🚌 Drivers</span>
-            <span class="text-[11px] font-mono px-2 py-0.5 rounded-full ${initialTab === 'drivers' ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'}">${drivers.length}</span>
           </button>
 
-          <button type="button" id="dir-tab-staff" class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 ${initialTab === 'staff' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
+          <button type="button" id="dir-tab-staff" class="py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer select-none flex items-center justify-center gap-1.5 ${initialTab === 'staff' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
             <span>👔 Staff</span>
-            <span class="text-[11px] font-mono px-2 py-0.5 rounded-full ${initialTab === 'staff' ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'}">${staff.length}</span>
           </button>
         </div>
 
@@ -137,7 +130,6 @@ class DirectoriesPage {
             <div>
               <h2 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
                 <span>👨‍👩‍👧 Registered Parent Accounts</span>
-                <span class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 font-mono font-bold" id="dir-parents-count-header">${parents.length}</span>
               </h2>
               <p class="text-[11px] text-slate-400 mt-0.5">Parents self-registered via account registration with student pickup details.</p>
             </div>
@@ -152,9 +144,6 @@ class DirectoriesPage {
               <input type="text" id="dir-search-parents" placeholder="Search parent by name or phone number..."
                      class="w-full text-xs sm:text-sm py-2.5 pl-10 pr-9 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner" />
               <button type="button" id="dir-clear-parents-search" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs font-bold cursor-pointer p-1">✕</button>
-            </div>
-            <div class="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0 hidden sm:block">
-              <span id="dir-parents-filter-count">${parents.length}</span> parents found
             </div>
           </div>
 
@@ -214,7 +203,6 @@ class DirectoriesPage {
             <div>
               <h2 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
                 <span>🚌 Registered Transport Drivers</span>
-                <span class="text-xs px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-mono font-bold" id="dir-drivers-count-header">${drivers.length}</span>
               </h2>
               <p class="text-[11px] text-slate-400 mt-0.5">Drivers are automatically added with sequential Van names upon account creation.</p>
             </div>
@@ -236,9 +224,6 @@ class DirectoriesPage {
               <input type="text" id="dir-search-drivers" placeholder="Search driver by name, phone number, or van plate..."
                      class="w-full text-xs sm:text-sm py-2.5 pl-10 pr-9 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner" />
               <button type="button" id="dir-clear-drivers-search" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs font-bold cursor-pointer p-1">✕</button>
-            </div>
-            <div class="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0 hidden sm:block">
-              <span id="dir-drivers-filter-count">${drivers.length}</span> drivers found
             </div>
           </div>
 
@@ -299,7 +284,6 @@ class DirectoriesPage {
             <div>
               <h2 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
                 <span>👔 Personally Added Staff</span>
-                <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-mono font-bold" id="dir-staff-count-header">${staff.length}</span>
               </h2>
               <p class="text-[11px] text-slate-400 mt-0.5">Campus helpers, attendants, and non-gate staff passes.</p>
             </div>
@@ -327,9 +311,6 @@ class DirectoriesPage {
               <input type="text" id="dir-search-staff" placeholder="Search staff by full name only (e.g. Ginzy Cherlan)..."
                      class="w-full text-xs sm:text-sm py-2.5 pl-10 pr-9 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner" />
               <button type="button" id="dir-clear-staff-search" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs font-bold cursor-pointer p-1">✕</button>
-            </div>
-            <div class="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0 hidden sm:block">
-              <span id="dir-staff-filter-count">${staff.length}</span> staff found
             </div>
           </div>
 
@@ -522,8 +503,6 @@ class DirectoriesPage {
     // 1. PARENTS SEARCH (By Name or Phone)
     const searchParents = document.getElementById('dir-search-parents');
     const clearParents = document.getElementById('dir-clear-parents-search');
-    const parentsCountHeader = document.getElementById('dir-parents-count-header');
-    const parentsFilterCount = document.getElementById('dir-parents-filter-count');
     const parentsNoRes = document.getElementById('dir-parents-no-results');
     const parentCards = document.querySelectorAll('#dir-parents-list .dir-parent-card');
 
@@ -547,14 +526,6 @@ class DirectoriesPage {
           const term = parentsNoRes.querySelector('.search-term');
           if (term) term.textContent = searchParents.value.trim();
         }
-
-        const total = parentCards.length;
-        if (parentsCountHeader) {
-          parentsCountHeader.textContent = query ? `${visible} / ${total}` : total;
-        }
-        if (parentsFilterCount) {
-          parentsFilterCount.textContent = visible;
-        }
       };
 
       searchParents.addEventListener('input', filterParents);
@@ -570,8 +541,6 @@ class DirectoriesPage {
     // 2. DRIVERS SEARCH (By Name, Phone, or Van No)
     const searchDrivers = document.getElementById('dir-search-drivers');
     const clearDrivers = document.getElementById('dir-clear-drivers-search');
-    const driversCountHeader = document.getElementById('dir-drivers-count-header');
-    const driversFilterCount = document.getElementById('dir-drivers-filter-count');
     const driversNoRes = document.getElementById('dir-drivers-no-results');
     const driverCards = document.querySelectorAll('#dir-drivers-list .dir-driver-card');
 
@@ -596,14 +565,6 @@ class DirectoriesPage {
           const term = driversNoRes.querySelector('.search-term');
           if (term) term.textContent = searchDrivers.value.trim();
         }
-
-        const total = driverCards.length;
-        if (driversCountHeader) {
-          driversCountHeader.textContent = query ? `${visible} / ${total}` : total;
-        }
-        if (driversFilterCount) {
-          driversFilterCount.textContent = visible;
-        }
       };
 
       searchDrivers.addEventListener('input', filterDrivers);
@@ -619,8 +580,6 @@ class DirectoriesPage {
     // 3. STAFF SEARCH (STRICTLY BY FULL NAME ONLY as requested!)
     const searchStaff = document.getElementById('dir-search-staff');
     const clearStaff = document.getElementById('dir-clear-staff-search');
-    const staffCountHeader = document.getElementById('dir-staff-count-header');
-    const staffFilterCount = document.getElementById('dir-staff-filter-count');
     const staffNoRes = document.getElementById('dir-staff-no-results');
     const staffCards = document.querySelectorAll('#dir-staff-list .dir-staff-card');
 
@@ -643,14 +602,6 @@ class DirectoriesPage {
           staffNoRes.classList.toggle('hidden', visible > 0 || !query);
           const term = staffNoRes.querySelector('.search-term');
           if (term) term.textContent = searchStaff.value.trim();
-        }
-
-        const total = staffCards.length;
-        if (staffCountHeader) {
-          staffCountHeader.textContent = query ? `${visible} / ${total}` : total;
-        }
-        if (staffFilterCount) {
-          staffFilterCount.textContent = visible;
         }
       };
 
