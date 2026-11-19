@@ -603,8 +603,15 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
-      // HEALTH CHECK & KEEP-ALIVE (Zero-payload instant response for uptime pings)
-      if (pathname === '/api/health' && req.method === 'GET') {
+      // HEALTH CHECK & KEEP-ALIVE (Zero-payload instant response for uptime pings & cronjobs)
+      if ((pathname === '/api/health' || pathname === '/health') && (req.method === 'GET' || req.method === 'HEAD')) {
+        if (req.method === 'HEAD') {
+          res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          });
+          return res.end();
+        }
         return sendJson(res, 200, {
           status: 'ok',
           service: 'CampusRide',
@@ -1277,16 +1284,16 @@ const server = http.createServer(async (req, res) => {
         }
 
         const driverId = qrPayload.replace('CAMPUSRIDE:DRIVER:', '').trim();
-        const driver = db.prepare('SELECT * FROM drivers WHERE id = ?').get(driverId);
+        const driver = db.prepare('SELECT * FROM drivers WHERE id = ? OR label = ?').get(driverId, driverId);
         if (!driver) return sendError(res, 404, 'No registered vehicle or staff matches this pass.');
 
         // Alternation enforcement:
         // Find last event for this vehicle/staff
         const lastLog = db.prepare(`
           SELECT event_type FROM van_logs 
-          WHERE driver_id = ? AND (event_type = 'entry' OR event_type = 'exit') 
+          WHERE (driver_id = ? OR driver_id = ? OR driver_label = ?) AND (event_type = 'entry' OR event_type = 'exit') 
           ORDER BY timestamp DESC LIMIT 1
-        `).get(driverId);
+        `).get(driver.id, driverId, driver.label);
 
         const lastState = lastLog ? lastLog.event_type : 'exit'; // Default to outside
 

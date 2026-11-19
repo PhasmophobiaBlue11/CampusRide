@@ -325,47 +325,117 @@ window.printBulkPasses = function(title, passList) {
 };
 
 // Global QR Modal Helper for Driver / Staff Pass
-window.showDriverPassQRModal = function({ id, label, name, plate, phone }) {
+window.drawQrCanvasFallback = function(imgElement, encodedData) {
+  try {
+    const parent = imgElement.parentElement;
+    const canvas = document.createElement('canvas');
+    canvas.width = 220;
+    canvas.height = 220;
+    canvas.className = 'rounded-xl mx-auto block shadow-xs';
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 220, 220);
+    ctx.fillStyle = '#0f172a';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(8, 8, 204, 204);
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('CampusRide Pass', 110, 80);
+    ctx.font = 'bold 11px monospace';
+    const text = decodeURIComponent(encodedData || '');
+    ctx.fillText(text.slice(0, 22), 110, 115);
+    ctx.fillText(text.slice(22, 44), 110, 135);
+    ctx.fillStyle = '#10b981';
+    ctx.fillText('✓ Gate Pass Active', 110, 165);
+    if (parent) parent.replaceChild(canvas, imgElement);
+  } catch (e) {}
+};
+
+window.showPassModal = function({ id, label, name, plate, phone, type }) {
   const driverId = id || label;
+  const isStaff = type === 'staff' || (label && label.toLowerCase().startsWith('staff')) || plate === 'Staff Pass';
   const payload = `CAMPUSRIDE:DRIVER:${driverId}`;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=2&data=${encodeURIComponent(payload)}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=2&data=${encodeURIComponent(payload)}`;
 
   const isRawId = (str) => typeof str === 'string' && (str.startsWith('drv_') || str.startsWith('usr_') || str.startsWith('id_') || str.length > 25);
-  const cleanLabel = (label && !isRawId(label)) ? label : '';
-  const cleanName = (name && !isRawId(name)) ? name : 'Campus Member';
+  const cleanLabel = (label && !isRawId(label)) ? label : (isStaff ? 'Staff Pass' : 'Vehicle Pass');
+  const cleanName = (name && !isRawId(name)) ? name : (isStaff ? 'Campus Staff' : 'Transit Driver');
   const cleanPlate = (plate && !isRawId(plate) && plate !== 'Staff Pass') ? plate : '';
-  const numberText = cleanLabel + (cleanPlate ? ` • ${cleanPlate}` : '');
+  const numberText = isStaff ? cleanLabel : (cleanLabel + (cleanPlate ? ` • ${cleanPlate}` : ''));
+
+  // Remove any previously open pass modal to prevent duplicates
+  const existing = document.getElementById('campusride-pass-modal');
+  if (existing) existing.remove();
 
   const modal = document.createElement('div');
-  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4';
+  modal.id = 'campusride-pass-modal';
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-fade-in';
+
+  const badgeClass = isStaff 
+    ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800' 
+    : 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800';
+  const badgeIcon = isStaff ? '👔' : '🚌';
+
   modal.innerHTML = `
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-sm shadow-2xl p-6 space-y-4 text-center animate-fade-in-up">
       <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-        <span class="text-xs font-black px-2.5 py-1 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300">${cleanLabel || 'QR Pass'}</span>
-        <button id="close-qr-pass-modal" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-xl font-bold cursor-pointer">✕</button>
+        <span class="inline-flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-md border ${badgeClass}">
+          <span>${badgeIcon}</span> <span>${cleanLabel}</span>
+        </span>
+        <button id="close-qr-pass-modal" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-xl font-bold p-1 cursor-pointer" title="Close">✕</button>
       </div>
 
       <!-- Minimalist Pass Content: Only QR, Name, and Number -->
-      <div id="printable-pass-card" class="p-4 bg-white rounded-2xl border-2 border-dashed border-slate-300 text-slate-900 space-y-3 max-w-[260px] mx-auto">
-        <img src="${qrUrl}" width="200" height="200" alt="QR Pass" class="rounded-xl shadow-sm mx-auto block" />
+      <div id="printable-pass-card" class="p-4 bg-white rounded-2xl border-2 border-dashed border-slate-300 text-slate-900 space-y-3 max-w-[260px] mx-auto shadow-sm">
+        <div class="w-[200px] h-[200px] mx-auto bg-slate-50 rounded-xl flex items-center justify-center overflow-hidden">
+          <img src="${qrUrl}" width="200" height="200" alt="QR Pass" class="rounded-xl shadow-xs mx-auto block" 
+               onerror="window.drawQrCanvasFallback(this, '${encodeURIComponent(payload)}');" />
+        </div>
         <div>
-          <div class="text-base font-black text-slate-900">${cleanName}</div>
-          <div class="text-xs font-mono font-bold text-slate-700 mt-0.5">${numberText}</div>
+          <div class="text-base font-black text-slate-900 leading-snug">${cleanName}</div>
+          <div class="text-xs font-mono font-bold text-slate-700 mt-1">${numberText}</div>
         </div>
       </div>
 
-      <button id="print-qr-pass-btn" class="cr-btn cr-btn-primary w-full py-2.5 text-xs font-bold cursor-pointer shadow-md flex items-center justify-center gap-1.5">
-        <span>🖨️</span> <span>Print Pass</span>
-      </button>
+      <div class="flex items-center gap-2 pt-1">
+        <button id="print-qr-pass-btn" class="cr-btn cr-btn-primary flex-1 py-2.5 text-xs font-bold cursor-pointer shadow-md flex items-center justify-center gap-1.5">
+          <span>🖨️</span> <span>Print Pass</span>
+        </button>
+        <button id="dismiss-qr-pass-btn" class="cr-btn bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2.5 px-4 text-xs font-bold cursor-pointer">
+          Close
+        </button>
+      </div>
     </div>
   `;
 
   document.body.appendChild(modal);
-  modal.querySelector('#close-qr-pass-modal').onclick = () => modal.remove();
+
+  const closeModal = () => {
+    modal.remove();
+    document.removeEventListener('keydown', handleEsc);
+  };
+  const handleEsc = (e) => {
+    if (e.key === 'Escape') closeModal();
+  };
+  document.addEventListener('keydown', handleEsc);
+
+  modal.querySelector('#close-qr-pass-modal').onclick = closeModal;
+  modal.querySelector('#dismiss-qr-pass-btn').onclick = closeModal;
+  modal.onclick = (e) => {
+    if (e.target === modal) closeModal();
+  };
+
   modal.querySelector('#print-qr-pass-btn').onclick = () => {
-    window.printSinglePass({ label: cleanLabel, name: cleanName, number: numberText, id: driverId });
+    if (typeof window.printSinglePass === 'function') {
+      window.printSinglePass({ id: driverId, label: cleanLabel, name: cleanName, number: numberText, type: isStaff ? 'staff' : 'van' });
+    } else {
+      window.print();
+    }
   };
 };
+
+window.showDriverPassQRModal = window.showPassModal;
+window.showStaffPassQRModal = window.showPassModal;
 
 window.qrPayload = {
   buildPassQR: (label, name, plate, phone, id) => {

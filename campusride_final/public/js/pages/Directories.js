@@ -50,6 +50,20 @@ class DirectoriesPage {
         staff = localStaff;
       }
 
+      // Deduplicate staff list by ID and normalized Name to guarantee no duplicate cards or count inflation
+      const seenStaffIds = new Set();
+      const seenStaffNames = new Set();
+      staff = staff.filter(s => {
+        if (!s) return false;
+        const sId = String(s.id || '').trim();
+        const sName = String(s.driver_name || '').trim().toLowerCase();
+        if (sId && seenStaffIds.has(sId)) return false;
+        if (sName && seenStaffNames.has(sName)) return false;
+        if (sId) seenStaffIds.add(sId);
+        if (sName) seenStaffNames.add(sName);
+        return true;
+      });
+
       // Personally added staff sorted numerically: Staff 1, Staff 2, ...
       staff.sort((a, b) => {
         const numA = parseInt((a.label || '').replace(/\D/g, ''), 10) || 0;
@@ -792,19 +806,40 @@ class DirectoriesPage {
       };
     });
 
-    // View Pass Buttons
+    // View Pass Buttons (Direct Click + Delegated Fallback)
+    const openDriverPass = (btn) => {
+      if (!btn) return;
+      const id = btn.getAttribute('data-id');
+      const label = btn.getAttribute('data-label');
+      const name = btn.getAttribute('data-name');
+      const plate = btn.getAttribute('data-plate');
+      const phone = btn.getAttribute('data-phone');
+      if (typeof window.showPassModal === 'function') {
+        window.showPassModal({ id, label, name, plate, phone, type: 'van' });
+      } else if (typeof window.showDriverPassQRModal === 'function') {
+        window.showDriverPassQRModal({ id, label, name, plate, phone });
+      }
+    };
+
+    const openStaffPass = (btn) => {
+      if (!btn) return;
+      const id = btn.getAttribute('data-id');
+      const label = btn.getAttribute('data-label');
+      const name = btn.getAttribute('data-name');
+      const plate = btn.getAttribute('data-plate') || 'Staff Pass';
+      const phone = btn.getAttribute('data-phone') || '';
+      if (typeof window.showPassModal === 'function') {
+        window.showPassModal({ id, label, name, plate, phone, type: 'staff' });
+      } else if (typeof window.showDriverPassQRModal === 'function') {
+        window.showDriverPassQRModal({ id, label, name, plate: 'Staff Pass', phone });
+      }
+    };
+
     const viewDriverBtns = document.querySelectorAll('.dir-view-driver-pass-btn');
     viewDriverBtns.forEach(btn => {
       btn.onclick = (e) => {
         e.stopPropagation();
-        const id = btn.getAttribute('data-id');
-        const label = btn.getAttribute('data-label');
-        const name = btn.getAttribute('data-name');
-        const plate = btn.getAttribute('data-plate');
-        const phone = btn.getAttribute('data-phone');
-        if (typeof window.showPassModal === 'function') {
-          window.showPassModal({ id, label, name, plate, phone, type: 'van' });
-        }
+        openDriverPass(btn);
       };
     });
 
@@ -812,16 +847,29 @@ class DirectoriesPage {
     viewStaffBtns.forEach(btn => {
       btn.onclick = (e) => {
         e.stopPropagation();
-        const id = btn.getAttribute('data-id');
-        const label = btn.getAttribute('data-label');
-        const name = btn.getAttribute('data-name');
-        const plate = btn.getAttribute('data-plate') || 'Staff Pass';
-        const phone = btn.getAttribute('data-phone') || '';
-        if (typeof window.showPassModal === 'function') {
-          window.showPassModal({ id, label, name, plate, phone, type: 'staff' });
-        }
+        openStaffPass(btn);
       };
     });
+
+    // Delegated container click fallback
+    const dirContainer = document.getElementById('grid-staff') || document.getElementById('grid-drivers');
+    if (dirContainer && !dirContainer._passDelegated) {
+      dirContainer._passDelegated = true;
+      document.addEventListener('click', (e) => {
+        const sBtn = e.target.closest('.dir-view-staff-pass-btn');
+        if (sBtn) {
+          e.stopPropagation();
+          openStaffPass(sBtn);
+          return;
+        }
+        const dBtn = e.target.closest('.dir-view-driver-pass-btn');
+        if (dBtn) {
+          e.stopPropagation();
+          openDriverPass(dBtn);
+          return;
+        }
+      });
+    }
 
     // Bulk Print All Driver QRs
     const printAllDriversBtn = document.getElementById('dir-print-all-drivers-btn');
