@@ -44,20 +44,112 @@
     if (hash === '#/staff' || hash.startsWith('#/staff')) return 'staff';
     if (hash === '#/admin' || hash.startsWith('#/admin')) return 'admin';
 
-    // 4. Stored role in localStorage from previous session
-    const saved = localStorage.getItem('campusride_app_role');
-    if (saved && ['driver', 'parent', 'staff', 'admin'].includes(saved)) {
-      return saved;
-    }
-
+    // Strictly DO NOT guess role from localStorage: Role MUST be explicitly specified in URL or locked HTML
     return null;
   }
 
   async function route() {
     try {
       const hash = window.location.hash.slice(1) || '/';
-    const path = hash.split('?')[0];
-    const activeApp = detectAppRole();
+      const path = hash.split('?')[0];
+      const activeApp = detectAppRole();
+
+      // STRICT ROLE SPECIFICATION REQUIREMENT:
+      // When root URL is accessed without specifying /driver, /parent, /staff, /admin:
+      // DO NOT open any role or dashboard! Show "Please Specify Role" screen.
+      if (!activeApp) {
+        if (path === '/register-driver') {
+          appEl.innerHTML = window.DriverRegisterPage.render();
+          window.DriverRegisterPage.attachEvents();
+          if (window.i18n) window.i18n.translateDOM();
+          return;
+        }
+        if (path === '/register-parent') {
+          appEl.innerHTML = window.ParentRegisterPage.render();
+          window.ParentRegisterPage.attachEvents();
+          if (window.i18n) window.i18n.translateDOM();
+          return;
+        }
+        if (path === '/register-staff') {
+          appEl.innerHTML = window.StaffRegisterPage.render();
+          window.StaffRegisterPage.attachEvents();
+          if (window.i18n) window.i18n.translateDOM();
+          return;
+        }
+        if (path === '/forgot-password') {
+          appEl.innerHTML = window.ForgotPasswordPage.render();
+          window.ForgotPasswordPage.attachEvents();
+          if (window.i18n) window.i18n.translateDOM();
+          return;
+        }
+
+        // Clear stored role from previous sessions so it never defaults to admin or any role
+        localStorage.removeItem('campusride_app_role');
+
+        appEl.innerHTML = `
+          <div class="min-h-screen flex items-center justify-center p-4 relative z-10">
+            <div class="cr-card w-full max-w-md p-6 sm:p-8 text-center animate-fade-in-up space-y-6">
+              <div class="w-16 h-16 mx-auto rounded-3xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center text-3xl shadow-sm border border-slate-200 dark:border-slate-700">
+                🔒
+              </div>
+              <div class="space-y-1.5">
+                <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Please Specify Role</h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs mx-auto">
+                  No role was specified in the URL. Please specify your role in the URL or select a portal below to open the site:
+                </p>
+              </div>
+
+              <div class="space-y-2.5 text-left">
+                <a href="/driver" class="flex items-center justify-between p-3.5 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 hover:bg-amber-100/80 dark:hover:bg-amber-900/40 transition group">
+                  <div class="flex items-center gap-3">
+                    <span class="text-2xl">🚌</span>
+                    <div>
+                      <div class="text-xs font-bold text-slate-900 dark:text-white">Driver Portal</div>
+                      <div class="text-[11px] text-amber-700 dark:text-amber-400 font-medium">Van console & journeys</div>
+                    </div>
+                  </div>
+                  <span class="text-xs font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/60 px-2 py-0.5 rounded-md">/driver</span>
+                </a>
+
+                <a href="/parent" class="flex items-center justify-between p-3.5 rounded-xl border border-indigo-300 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-950/30 hover:bg-indigo-100/80 dark:hover:bg-indigo-900/40 transition group">
+                  <div class="flex items-center gap-3">
+                    <span class="text-2xl">👨‍👩‍👧</span>
+                    <div>
+                      <div class="text-xs font-bold text-slate-900 dark:text-white">Parent Portal</div>
+                      <div class="text-[11px] text-indigo-700 dark:text-indigo-400 font-medium">Student tracking & radar</div>
+                    </div>
+                  </div>
+                  <span class="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/60 px-2 py-0.5 rounded-md">/parent</span>
+                </a>
+
+                <a href="/staff" class="flex items-center justify-between p-3.5 rounded-xl border border-blue-300 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/30 hover:bg-blue-100/80 dark:hover:bg-blue-900/40 transition group">
+                  <div class="flex items-center gap-3">
+                    <span class="text-2xl">🛂</span>
+                    <div>
+                      <div class="text-xs font-bold text-slate-900 dark:text-white">Gate Security & Staff</div>
+                      <div class="text-[11px] text-blue-700 dark:text-blue-400 font-medium">Entry/exit pass scanning</div>
+                    </div>
+                  </div>
+                  <span class="text-xs font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/60 px-2 py-0.5 rounded-md">/staff</span>
+                </a>
+
+                <a href="/admin" class="flex items-center justify-between p-3.5 rounded-xl border border-purple-300 dark:border-purple-800 bg-purple-50/60 dark:bg-purple-950/30 hover:bg-purple-100/80 dark:hover:bg-purple-900/40 transition group">
+                  <div class="flex items-center gap-3">
+                    <span class="text-2xl">🛡️</span>
+                    <div>
+                      <div class="text-xs font-bold text-slate-900 dark:text-white">Master Administrator</div>
+                      <div class="text-[11px] text-purple-700 dark:text-purple-400 font-medium">System administration</div>
+                    </div>
+                  </div>
+                  <span class="text-xs font-mono font-bold text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/60 px-2 py-0.5 rounded-md">/admin</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        `;
+        if (window.i18n) window.i18n.translateDOM();
+        return;
+      }
 
     // Dedicated Registration Routes
     if (path === '/register-driver') {
@@ -250,16 +342,16 @@
     let attachCallback = null;
 
     if (path === '/' || path === '') {
-      if (activeApp === 'driver' || user.driverProfile) {
+      if (activeApp === 'driver') {
         pageHtml = await window.DriverHomePage.render(user);
         attachCallback = () => window.DriverHomePage.attachEvents(user);
-      } else if (activeApp === 'parent' || user.parentProfile) {
+      } else if (activeApp === 'parent') {
         pageHtml = await window.ParentHomePage.render(user);
         attachCallback = () => window.ParentHomePage.attachEvents(user);
-      } else if (user.role === 'admin' && (activeApp === 'admin' || !activeApp)) {
+      } else if (activeApp === 'admin' && user.role === 'admin') {
         pageHtml = await window.AdminDashboardPage.render(user);
         attachCallback = () => window.AdminDashboardPage.attachEvents(user);
-      } else {
+      } else if (activeApp === 'staff') {
         pageHtml = await window.StaffHomePage.render(user);
         attachCallback = () => window.StaffHomePage.attachEvents(user);
       }

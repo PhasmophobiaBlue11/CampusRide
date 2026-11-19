@@ -66,16 +66,15 @@
           const host = window.location.hostname.toLowerCase();
           const path = window.location.pathname.toLowerCase();
           const hash = window.location.hash.toLowerCase();
-          const savedRole = localStorage.getItem('campusride_app_role');
           let role = null;
-          if (host.includes('driver') || path.includes('driver') || hash.includes('driver') || savedRole === 'driver') role = 'driver';
-          else if (host.includes('parent') || path.includes('parent') || hash.includes('parent') || savedRole === 'parent') role = 'parent';
-          else if (host.includes('staff') || path.includes('staff') || hash.includes('staff') || savedRole === 'staff') role = 'staff';
-          else if (host.includes('admin') || path.includes('admin') || hash.includes('admin') || savedRole === 'admin') role = 'admin';
+          if (host.startsWith('driver.') || host.includes('-driver') || path.includes('/driver') || hash.includes('/driver')) role = 'driver';
+          else if (host.startsWith('parent.') || host.includes('-parent') || path.includes('/parent') || hash.includes('/parent')) role = 'parent';
+          else if (host.startsWith('staff.') || host.includes('-staff') || path.includes('/staff') || hash.includes('/staff')) role = 'staff';
+          else if (host.startsWith('admin.') || host.includes('-admin') || path.includes('/admin') || hash.includes('/admin')) role = 'admin';
 
           const iconEl = document.getElementById('initial-loader-icon');
           const textEl = document.getElementById('initial-loader-text');
-          if (iconEl && textEl && role) {
+          if (iconEl && textEl) {
             if (role === 'driver') {
               iconEl.className = 'w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-xl shadow-amber-500/25 animate-bounce';
               iconEl.innerHTML = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="15" rx="3"></rect><line x1="3" y1="10" x2="21" y2="10"></line><circle cx="7.5" cy="19" r="2"></circle><circle cx="16.5" cy="19" r="2"></circle></svg>';
@@ -92,6 +91,10 @@
               iconEl.className = 'w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-700 to-indigo-700 flex items-center justify-center text-white shadow-xl shadow-purple-500/25 animate-bounce';
               iconEl.innerHTML = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>';
               textEl.textContent = 'Loading CampusRide Master Admin...';
+            } else {
+              iconEl.className = 'w-16 h-16 rounded-2xl bg-gradient-to-tr from-slate-600 to-slate-800 flex items-center justify-center text-white shadow-xl shadow-slate-500/25 animate-pulse';
+              iconEl.innerHTML = '<span class="text-2xl">🔒</span>';
+              textEl.textContent = 'Please specify a role to continue...';
             }
           }
         } catch (e) {}

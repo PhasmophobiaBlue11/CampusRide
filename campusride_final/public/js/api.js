@@ -14,19 +14,15 @@ class ApiClient {
     if (window.CAMPUSRIDE_LOCKED_ROLE) {
       return `campusride_${window.CAMPUSRIDE_LOCKED_ROLE}_token`;
     }
-    // 2. URL Path / Hash check
+    // 2. URL Path / Hash / Subdomain check
     const p = (window.location.pathname + window.location.hash).toLowerCase();
-    if (p.includes('/driver')) return 'campusride_driver_token';
-    if (p.includes('/parent')) return 'campusride_parent_token';
-    if (p.includes('/staff')) return 'campusride_staff_token';
-    if (p.includes('/admin')) return 'campusride_admin_token';
+    const h = window.location.hostname.toLowerCase();
+    if (h.startsWith('driver.') || h.includes('-driver') || p.includes('/driver')) return 'campusride_driver_token';
+    if (h.startsWith('parent.') || h.includes('-parent') || p.includes('/parent')) return 'campusride_parent_token';
+    if (h.startsWith('staff.') || h.includes('-staff') || p.includes('/staff')) return 'campusride_staff_token';
+    if (h.startsWith('admin.') || h.includes('-admin') || p.includes('/admin')) return 'campusride_admin_token';
 
-    // 3. Stored app role
-    const r = localStorage.getItem('campusride_app_role');
-    if (r && ['driver', 'parent', 'staff', 'admin'].includes(r)) {
-      return `campusride_${r}_token`;
-    }
-
+    // If no role is specified in URL, do NOT load role-specific tokens
     return 'campusride_token';
   }
 
