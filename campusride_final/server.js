@@ -1453,68 +1453,156 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 201, { success: true, label, id, driver_name: driver_name.trim(), van_no });
       }
 
-      // VAN ENTRY/EXIT REGISTER: View logs with date filter & pagination (§7.6)
+      // VAN & STAFF ENTRY/EXIT & JOURNEY REGISTER: View logs with entityType, category, driverId, date filters (§7.6)
       if (pathname === '/api/logs' && req.method === 'GET') {
+        const entityType = (urlObj.searchParams.get('entityType') || urlObj.searchParams.get('type') || '').toLowerCase(); // 'van' | 'driver' | 'staff' | 'all'
+        const category = (urlObj.searchParams.get('category') || urlObj.searchParams.get('logType') || '').toLowerCase(); // 'entry_exit' | 'gate' | 'journey' | 'all'
         const driverId = urlObj.searchParams.get('driverId');
         const date = urlObj.searchParams.get('date'); // YYYY-MM-DD
         const limit = parseInt(urlObj.searchParams.get('limit') || '500', 10);
         const offset = parseInt(urlObj.searchParams.get('offset') || '0', 10);
 
-        let query = 'SELECT * FROM van_logs WHERE 1=1';
+        let query = `
+          SELECT 
+            vl.id,
+            vl.qr_identifier,
+            vl.driver_id,
+            vl.driver_name,
+            vl.driver_label,
+            vl.event_type,
+            vl.scanned_by,
+            vl.timestamp,
+            COALESCE(d.type, CASE WHEN vl.driver_label LIKE 'Staff%' THEN 'staff' ELSE 'van' END) as entity_type,
+            COALESCE(d.van_no, '') as van_no,
+            COALESCE(d.phone, '') as phone,
+            COALESCE(d.vehicle_type, '') as vehicle_type
+          FROM van_logs vl
+          LEFT JOIN drivers d ON vl.driver_id = d.id
+          WHERE 1=1
+        `;
         const params = [];
 
+        // Filter by Entity Type (driver/van vs staff)
+        if (entityType === 'staff') {
+          query += " AND (d.type = 'staff' OR (d.type IS NULL AND vl.driver_label LIKE 'Staff%'))";
+        } else if (entityType === 'driver' || entityType === 'van') {
+          query += " AND (d.type = 'van' OR (d.type IS NULL AND vl.driver_label NOT LIKE 'Staff%'))";
+        }
+
+        // Filter by Log Category (entry_exit vs journey)
+        if (category === 'entry_exit' || category === 'gate') {
+          query += " AND (vl.event_type = 'entry' OR vl.event_type = 'exit')";
+        } else if (category === 'journey') {
+          query += " AND (vl.event_type = 'journey_start' OR vl.event_type = 'journey_end')";
+        }
+
         if (driverId) {
-          query += ' AND driver_id = ?';
+          query += ' AND vl.driver_id = ?';
           params.push(driverId);
         }
         if (date) {
-          query += ' AND date(timestamp) = date(?)';
+          query += ' AND date(vl.timestamp) = date(?)';
           params.push(date);
         }
 
-        query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?';
+        query += ' ORDER BY vl.timestamp DESC LIMIT ? OFFSET ?';
         params.push(limit, offset);
 
         const logs = db.prepare(query).all(...params);
         const safeLogs = logs.map(l => ({
           id: l.id,
-          driver_label: l.driver_label || 'Vehicle',
-          driver_name: l.driver_name || 'Driver',
+          driver_id: l.driver_id,
+          driver_label: l.driver_label || (l.entity_type === 'staff' ? 'Staff' : 'Vehicle'),
+          driver_name: l.driver_name || (l.entity_type === 'staff' ? 'Staff Member' : 'Driver'),
+          entity_type: l.entity_type,
+          van_no: l.van_no,
+          phone: l.phone,
+          vehicle_type: l.vehicle_type,
           event_type: l.event_type,
-          scanned_by: l.scanned_by,
+          scanned_by: l.scanned_by || 'Gate Staff',
           timestamp: l.timestamp
         }));
 
-        // Daily stats
-        let statsQuery = 'SELECT event_type, count(*) as count FROM van_logs WHERE 1=1';
+        // Detailed stats broken down by entity and event type
+        let statsSql = `
+          SELECT 
+            COALESCE(d.type, CASE WHEN vl.driver_label LIKE 'Staff%' THEN 'staff' ELSE 'van' END) as entity_type,
+            vl.event_type,
+            count(*) as count
+          FROM van_logs vl
+          LEFT JOIN drivers d ON vl.driver_id = d.id
+          WHERE 1=1
+        `;
         const statsParams = [];
-        if (driverId) {
-          statsQuery += ' AND driver_id = ?';
-          statsParams.push(driverId);
-        }
         if (date) {
-          statsQuery += ' AND date(timestamp) = date(?)';
+          statsSql += ' AND date(vl.timestamp) = date(?)';
           statsParams.push(date);
         }
-        statsQuery += ' GROUP BY event_type';
-        const statsRows = db.prepare(statsQuery).all(...statsParams);
-
-        const stats = { entry: 0, exit: 0, journey_start: 0 };
-        for (const row of statsRows) {
-          if (stats[row.event_type] !== undefined) stats[row.event_type] = row.count;
+        if (driverId) {
+          statsSql += ' AND vl.driver_id = ?';
+          statsParams.push(driverId);
         }
+        statsSql += ' GROUP BY entity_type, vl.event_type';
+
+        const statsRows = db.prepare(statsSql).all(...statsParams);
+
+        const stats = {
+          entry: 0,
+          exit: 0,
+          journey_start: 0,
+          journey_end: 0,
+          driver: {
+            entry: 0,
+            exit: 0,
+            journey_start: 0,
+            journey_end: 0,
+            total: 0,
+            inside: 0
+          },
+          staff: {
+            entry: 0,
+            exit: 0,
+            journey_start: 0,
+            journey_end: 0,
+            total: 0,
+            inside: 0
+          }
+        };
+
+        for (const row of statsRows) {
+          const eType = row.entity_type === 'staff' ? 'staff' : 'driver';
+          const ev = row.event_type;
+          const count = Number(row.count) || 0;
+
+          if (stats[ev] !== undefined) {
+            stats[ev] += count;
+          }
+          if (stats[eType] && stats[eType][ev] !== undefined) {
+            stats[eType][ev] += count;
+            stats[eType].total += count;
+          }
+        }
+
+        stats.driver.inside = Math.max(0, stats.driver.entry - stats.driver.exit);
+        stats.staff.inside = Math.max(0, stats.staff.entry - stats.staff.exit);
+        stats.inside = Math.max(0, stats.entry - stats.exit);
 
         return sendJson(res, 200, { logs: safeLogs, stats });
       }
 
-      // VAN REGISTER: Clear logs for driver/day (§7.6)
+      // VAN & STAFF REGISTER: Clear logs for entityType, driverId, category, and date (§7.6)
       if (pathname === '/api/logs' && req.method === 'DELETE') {
-        if (!user || user.role !== 'admin') return sendError(res, 403, 'Admin access required to clear logs');
+        if (!user || (user.role !== 'admin' && !user.staffProfile && user.role !== 'staff')) {
+          return sendError(res, 403, 'Gate staff or admin access required to clear logs');
+        }
         const driverId = urlObj.searchParams.get('driverId');
         const date = urlObj.searchParams.get('date');
+        const entityType = (urlObj.searchParams.get('entityType') || urlObj.searchParams.get('type') || '').toLowerCase();
+        const category = (urlObj.searchParams.get('category') || urlObj.searchParams.get('logType') || '').toLowerCase();
 
         let query = 'DELETE FROM van_logs WHERE 1=1';
         const params = [];
+
         if (driverId) {
           query += ' AND driver_id = ?';
           params.push(driverId);
@@ -1523,9 +1611,20 @@ const server = http.createServer(async (req, res) => {
           query += ' AND date(timestamp) = date(?)';
           params.push(date);
         }
+        if (category === 'entry_exit' || category === 'gate') {
+          query += " AND (event_type = 'entry' OR event_type = 'exit')";
+        } else if (category === 'journey') {
+          query += " AND (event_type = 'journey_start' OR event_type = 'journey_end')";
+        }
+        if (entityType === 'staff') {
+          query += " AND (driver_id IN (SELECT id FROM drivers WHERE type = 'staff') OR driver_label LIKE 'Staff%')";
+        } else if (entityType === 'driver' || entityType === 'van') {
+          query += " AND (driver_id IN (SELECT id FROM drivers WHERE type = 'van') OR driver_label NOT LIKE 'Staff%')";
+        }
 
         db.prepare(query).run(...params);
-        broadcastEvent('logs_cleared', { driverId, date });
+        saveBackupJson();
+        broadcastEvent('logs_cleared', { driverId, date, entityType, category });
         return sendJson(res, 200, { success: true });
       }
 

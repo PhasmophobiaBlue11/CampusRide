@@ -368,7 +368,7 @@
     } else if (path === '/registration-scanner') {
       pageHtml = window.RegistrationScannerPage.render(user);
       attachCallback = () => window.RegistrationScannerPage.attachEvents(user);
-    } else if (path === '/van-register') {
+    } else if (path === '/van-register' || path === '/daily-log' || path === '/daily-logs' || path === '/logs') {
       pageHtml = await window.VanRegisterPage.render(user);
       attachCallback = () => window.VanRegisterPage.attachEvents(user);
     } else if (path === '/drivers') {
