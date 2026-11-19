@@ -1,6 +1,6 @@
-// CampusRide — Progressive Web App Service Worker (v7.1)
+// CampusRide — Progressive Web App Service Worker (v7.2)
 // High-Speed App Shell Caching & Instant Cold-Start Masking
-const CACHE_NAME = 'campusride-app-v7.1';
+const CACHE_NAME = 'campusride-app-v7.2';
 
 const PRECACHE_ASSETS = [
   '/',
@@ -11,29 +11,29 @@ const PRECACHE_ASSETS = [
   '/admin.html',
   '/css/app.css',
   '/manifest.json',
-  '/js/sounds.js?v=5.1',
-  '/js/i18n.js?v=5.1',
-  '/js/api.js?v=5.1',
-  '/js/qr.js?v=5.1',
-  '/js/components/Header.js?v=5.1',
-  '/js/components/LanguageGate.js?v=5.1',
-  '/js/pages/Login.js?v=5.1',
-  '/js/pages/StaffRegister.js?v=5.1',
-  '/js/pages/DriverRegister.js?v=5.1',
-  '/js/pages/ParentRegister.js?v=5.1',
-  '/js/pages/ForgotPassword.js?v=5.1',
-  '/js/pages/AdminDashboard.js?v=5.1',
-  '/js/pages/StaffHome.js?v=5.1',
-  '/js/pages/EntryExitScanner.js?v=5.1',
-  '/js/pages/RegistrationScanner.js?v=5.1',
-  '/js/pages/VanRegister.js?v=5.1',
-  '/js/pages/DriversRegistry.js?v=5.1',
-  '/js/pages/DriverHome.js?v=5.1',
-  '/js/pages/ParentHome.js?v=5.1',
-  '/js/pages/Directories.js?v=5.1',
-  '/js/pages/WorkingStaff.js?v=5.1',
-  '/js/pages/Settings.js?v=5.1',
-  '/js/app.js?v=5.1'
+  '/js/sounds.js?v=5.2',
+  '/js/i18n.js?v=5.2',
+  '/js/api.js?v=5.2',
+  '/js/qr.js?v=5.2',
+  '/js/components/Header.js?v=5.2',
+  '/js/components/LanguageGate.js?v=5.2',
+  '/js/pages/Login.js?v=5.2',
+  '/js/pages/StaffRegister.js?v=5.2',
+  '/js/pages/DriverRegister.js?v=5.2',
+  '/js/pages/ParentRegister.js?v=5.2',
+  '/js/pages/ForgotPassword.js?v=5.2',
+  '/js/pages/AdminDashboard.js?v=5.2',
+  '/js/pages/StaffHome.js?v=5.2',
+  '/js/pages/EntryExitScanner.js?v=5.2',
+  '/js/pages/RegistrationScanner.js?v=5.2',
+  '/js/pages/VanRegister.js?v=5.2',
+  '/js/pages/DriversRegistry.js?v=5.2',
+  '/js/pages/DriverHome.js?v=5.2',
+  '/js/pages/ParentHome.js?v=5.2',
+  '/js/pages/Directories.js?v=5.2',
+  '/js/pages/WorkingStaff.js?v=5.2',
+  '/js/pages/Settings.js?v=5.2',
+  '/js/app.js?v=5.2'
 ];
 
 self.addEventListener('install', (e) => {

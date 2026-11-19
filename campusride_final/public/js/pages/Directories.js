@@ -50,13 +50,17 @@ class DirectoriesPage {
         staff = localStaff;
       }
 
-      // Deduplicate staff list strictly by ID (ensuring all 103 unique staff members are preserved)
+      // Deduplicate staff list strictly by ID and normalized Name (guaranteeing zero duplicates)
       const seenStaffIds = new Set();
+      const seenStaffNames = new Set();
       staff = staff.filter(s => {
         if (!s) return false;
         const sId = String(s.id || '').trim();
+        const sName = String(s.driver_name || '').trim().toLowerCase();
         if (sId && seenStaffIds.has(sId)) return false;
+        if (sName && seenStaffNames.has(sName)) return false;
         if (sId) seenStaffIds.add(sId);
+        if (sName) seenStaffNames.add(sName);
         return true;
       });
 
