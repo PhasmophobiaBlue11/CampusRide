@@ -1,8 +1,8 @@
 // CampusRide — Dedicated Campus Directory (§7.7)
 // Three Distinct Options:
-// 1. Parents (View-only, NO add option)
-// 2. Drivers (View-only, NO add option — automatically added upon driver account creation)
-// 3. Staff (Non-gate staff added personally or by QR scan — asks ONLY for Name)
+// 1. Parents (View-only, NO add option) — Search by Name or Phone
+// 2. Drivers (View-only, NO add option) — Search by Name, Phone, or Van No
+// 3. Staff (Personally added or scanned passes) — Search STRICTLY by Name Only
 class DirectoriesPage {
   static currentTab = 'parents'; // 'parents' | 'drivers' | 'staff'
 
@@ -11,19 +11,15 @@ class DirectoriesPage {
     let parents = [];
     let staff = [];
 
-    // Load persistent staff and deletion tombstones from local device storage
+    // Load persistent staff backup from local device storage (offline fallback only)
     let localStaff = [];
-    let deletedStaffIds = new Set();
     try {
       const stored = localStorage.getItem('campusride_persistent_staff_registry');
       if (stored) localStaff = JSON.parse(stored);
-      const delStored = localStorage.getItem('campusride_deleted_staff_ids');
-      if (delStored) deletedStaffIds = new Set(JSON.parse(delStored));
     } catch (e) {
       localStaff = [];
-      deletedStaffIds = new Set();
     }
-    localStaff = (Array.isArray(localStaff) ? localStaff : []).filter(s => s && s.id && !deletedStaffIds.has(s.id));
+    localStaff = Array.isArray(localStaff) ? localStaff : [];
 
     try {
       const [allDriversRes, pRes] = await Promise.all([
@@ -31,6 +27,7 @@ class DirectoriesPage {
         window.api.request('/api/directories/parents')
       ]);
       const allDrivers = allDriversRes.drivers || [];
+
       // Natural numeric sort for drivers: Van 1, Van 2, ...
       drivers = allDrivers.filter(d => d.type === 'van').sort((a, b) => {
         const numA = parseInt((a.label || '').replace(/\D/g, ''), 10) || 0;
@@ -38,49 +35,35 @@ class DirectoriesPage {
         return numA - numB;
       });
 
-      // Server staff (filter out any locally deleted tombstones)
-      const serverStaff = allDrivers.filter(d => d.type === 'staff' && !deletedStaffIds.has(d.id));
-
-      // Indestructible Sync Check:
-      // If the device has staff that the server is missing (e.g. fresh Render container or deployment),
-      // merge immediately so the user never sees them disappear, and sync them back to the server.
-      const missingOnServer = localStaff.filter(ls => !serverStaff.some(ss => ss.id === ls.id));
-      if (missingOnServer.length > 0) {
-        window.api.request('/api/drivers/sync', {
-          method: 'POST',
-          body: JSON.stringify({ staffList: missingOnServer })
-        }).catch(err => console.warn('[Directories] Background staff sync notice:', err.message));
-
-        const mergedMap = new Map();
-        for (const s of [...serverStaff, ...missingOnServer]) {
-          if (!deletedStaffIds.has(s.id)) {
-            mergedMap.set(s.id, s);
-          }
-        }
-        staff = Array.from(mergedMap.values());
-      } else {
+      // Authoritative source of truth:
+      // When the server responds with staff, use the server's authoritative staff list (103 staff)
+      // and purge any stale ghost records from local device storage.
+      const serverStaff = allDrivers.filter(d => d.type === 'staff');
+      if (serverStaff.length > 0) {
         staff = serverStaff;
+        try {
+          localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(serverStaff));
+          localStorage.removeItem('campusride_deleted_staff_ids');
+        } catch (e) {}
+      } else {
+        // Fallback to local device storage only if server returns empty list (offline/restart)
+        staff = localStaff;
       }
 
-      // Keep device storage synchronized with current valid staff
-      const registryMap = new Map();
-      for (const s of localStaff) registryMap.set(s.id, s);
-      for (const s of staff) registryMap.set(s.id, s);
-      const updatedRegistry = Array.from(registryMap.values()).filter(s => !deletedStaffIds.has(s.id));
-      localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(updatedRegistry));
-
-      // Personally added staff: Staff 1, Staff 2, ...
+      // Personally added staff sorted numerically: Staff 1, Staff 2, ...
       staff.sort((a, b) => {
         const numA = parseInt((a.label || '').replace(/\D/g, ''), 10) || 0;
         const numB = parseInt((b.label || '').replace(/\D/g, ''), 10) || 0;
         return numA - numB;
       });
+
       parents = pRes.parents || [];
     } catch (err) {
       console.warn('[Directories] Fetch error:', err.message);
-      // Offline fallback: Use local persistent staff
       staff = localStaff;
     }
+
+    DirectoriesPage.currentParents = parents;
     DirectoriesPage.currentDrivers = drivers;
     DirectoriesPage.currentStaff = staff;
 
@@ -99,7 +82,7 @@ class DirectoriesPage {
       <div class="max-w-6xl mx-auto px-4 py-6 space-y-5">
         <!-- Back Button -->
         <div>
-          <button type="button" onclick="window.goBack()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer select-none">
+          <button type="button" onclick="window.goBack()" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer select-none">
             <span class="text-base font-black">←</span> <span>Back</span>
           </button>
         </div>
@@ -107,49 +90,72 @@ class DirectoriesPage {
         <!-- Page Header -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 class="text-2xl font-black text-slate-900 dark:text-white">Campus Directory</h1>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">Campus Directory</h1>
+            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
               Browse registered Parents, transport Drivers, and personally added Staff passes.
             </p>
           </div>
         </div>
 
         <!-- 3 Dedicated Options Tabs (Parents, Drivers, Staff) -->
-        <div class="grid grid-cols-3 gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl max-w-xl">
-          <button type="button" id="dir-tab-parents" class="py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer select-none flex items-center justify-center gap-1.5 ${initialTab === 'parents' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
+        <div class="grid grid-cols-3 gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl max-w-xl shadow-inner">
+          <button type="button" id="dir-tab-parents" class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 ${initialTab === 'parents' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
             <span>👨‍👩‍👧 Parents</span>
-            <span class="text-[10px] px-1.5 py-0.5 rounded-full ${initialTab === 'parents' ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'}">${parents.length}</span>
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded-full ${initialTab === 'parents' ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'}">${parents.length}</span>
           </button>
 
-          <button type="button" id="dir-tab-drivers" class="py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer select-none flex items-center justify-center gap-1.5 ${initialTab === 'drivers' ? 'bg-amber-500 text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
+          <button type="button" id="dir-tab-drivers" class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 ${initialTab === 'drivers' ? 'bg-amber-500 text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
             <span>🚌 Drivers</span>
-            <span class="text-[10px] px-1.5 py-0.5 rounded-full ${initialTab === 'drivers' ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'}">${drivers.length}</span>
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded-full ${initialTab === 'drivers' ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'}">${drivers.length}</span>
           </button>
 
-          <button type="button" id="dir-tab-staff" class="py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer select-none flex items-center justify-center gap-1.5 ${initialTab === 'staff' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
+          <button type="button" id="dir-tab-staff" class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 ${initialTab === 'staff' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
             <span>👔 Staff</span>
-            <span class="text-[10px] px-1.5 py-0.5 rounded-full ${initialTab === 'staff' ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'}">${staff.length}</span>
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded-full ${initialTab === 'staff' ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'}">${staff.length}</span>
           </button>
         </div>
 
-        <!-- 1. PARENTS DIRECTORY (NO ADD OPTION) -->
+        <!-- ========================================== -->
+        <!-- 1. PARENTS DIRECTORY (SEARCH BY NAME/PHONE) -->
+        <!-- ========================================== -->
         <div id="grid-parents" class="${initialTab === 'parents' ? '' : 'hidden '}space-y-4 animate-fade-in-up">
-          <div class="flex items-center justify-between pb-1 border-b border-slate-200 dark:border-slate-800">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-slate-200 dark:border-slate-800">
             <div>
-              <h2 class="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                <span>👨‍👩‍👧 Registered Parent Accounts (${parents.length})</span>
+              <h2 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <span>👨‍👩‍👧 Registered Parent Accounts</span>
+                <span class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 font-mono font-bold" id="dir-parents-count-header">${parents.length}</span>
               </h2>
               <p class="text-[11px] text-slate-400 mt-0.5">Parents self-registered via account registration with student pickup details.</p>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Dedicated Search Bar for Parents (Name or Phone) -->
+          <div class="cr-card p-3 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm flex items-center gap-3">
+            <div class="relative flex-1">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-sm">
+                🔍
+              </div>
+              <input type="text" id="dir-search-parents" placeholder="Search parent by name or phone number..."
+                     class="w-full text-xs sm:text-sm py-2.5 pl-10 pr-9 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner" />
+              <button type="button" id="dir-clear-parents-search" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs font-bold cursor-pointer p-1">✕</button>
+            </div>
+            <div class="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0 hidden sm:block">
+              <span id="dir-parents-filter-count">${parents.length}</span> parents found
+            </div>
+          </div>
+
+          <div id="dir-parents-no-results" class="hidden cr-card p-12 text-center text-slate-400 text-xs">
+            No parent accounts found matching "<span class="search-term font-semibold text-slate-700 dark:text-slate-200"></span>".
+          </div>
+
+          <div id="dir-parents-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             ${parents.length === 0 ? `
               <div class="col-span-full cr-card p-12 text-center text-slate-400 text-xs">
                 No parent accounts registered yet.
               </div>
             ` : parents.map(p => `
-              <div class="cr-card p-5 space-y-3 border-l-4 border-l-indigo-500 flex flex-col justify-between">
+              <div class="dir-parent-card cr-card p-5 space-y-3 border-l-4 border-l-indigo-500 flex flex-col justify-between"
+                   data-name="${(p.name || '').toLowerCase()}" data-phone="${(p.phone || '').replace(/\D/g, '')}">
                 <div>
                   <div class="flex items-center justify-between">
                     <h3 class="font-bold text-base text-slate-900 dark:text-white">${p.name}</h3>
@@ -186,29 +192,54 @@ class DirectoriesPage {
           </div>
         </div>
 
-        <!-- 2. DRIVERS DIRECTORY (NO ADD OPTION — Drivers automatically added upon registration as Van 1, Van 2, ...) -->
+        <!-- ========================================== -->
+        <!-- 2. DRIVERS DIRECTORY (SEARCH BY NAME/PHONE/VAN) -->
+        <!-- ========================================== -->
         <div id="grid-drivers" class="${initialTab === 'drivers' ? '' : 'hidden '}space-y-4 animate-fade-in-up">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-200 dark:border-slate-800">
             <div>
-              <h2 class="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                <span>🚌 Registered Transport Drivers (${drivers.length})</span>
+              <h2 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <span>🚌 Registered Transport Drivers</span>
+                <span class="text-xs px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-mono font-bold" id="dir-drivers-count-header">${drivers.length}</span>
               </h2>
               <p class="text-[11px] text-slate-400 mt-0.5">Drivers are automatically added with sequential Van names upon account creation.</p>
             </div>
-            ${drivers.length > 0 ? `
-              <button type="button" id="dir-print-all-drivers-btn" class="cr-btn cr-btn-secondary text-xs py-2 px-3.5 shadow-sm flex items-center gap-1.5 cursor-pointer">
-                <span>🖨️</span> <span>Print All Driver QRs</span>
-              </button>
-            ` : ''}
+            <div class="flex items-center gap-2">
+              ${drivers.length > 0 ? `
+                <button type="button" id="dir-print-all-drivers-btn" class="cr-btn cr-btn-secondary text-xs py-2 px-3.5 shadow-sm flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+                  <span>🖨️</span> <span>Print All Driver QRs</span>
+                </button>
+              ` : ''}
+            </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Dedicated Search Bar for Drivers (Name or Phone or Van No) -->
+          <div class="cr-card p-3 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm flex items-center gap-3">
+            <div class="relative flex-1">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-sm">
+                🔍
+              </div>
+              <input type="text" id="dir-search-drivers" placeholder="Search driver by name, phone number, or van plate..."
+                     class="w-full text-xs sm:text-sm py-2.5 pl-10 pr-9 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner" />
+              <button type="button" id="dir-clear-drivers-search" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs font-bold cursor-pointer p-1">✕</button>
+            </div>
+            <div class="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0 hidden sm:block">
+              <span id="dir-drivers-filter-count">${drivers.length}</span> drivers found
+            </div>
+          </div>
+
+          <div id="dir-drivers-no-results" class="hidden cr-card p-12 text-center text-slate-400 text-xs">
+            No transport drivers found matching "<span class="search-term font-semibold text-slate-700 dark:text-slate-200"></span>".
+          </div>
+
+          <div id="dir-drivers-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             ${drivers.length === 0 ? `
               <div class="col-span-full cr-card p-12 text-center text-slate-400 text-xs">
                 No transport drivers registered yet. Drivers appear here automatically as soon as they create an account.
               </div>
             ` : drivers.map(d => `
-              <div class="cr-card p-5 space-y-3 border-l-4 border-l-amber-500 flex flex-col justify-between">
+              <div class="dir-driver-card cr-card p-5 space-y-3 border-l-4 border-l-amber-500 flex flex-col justify-between"
+                   data-name="${(d.driver_name || '').toLowerCase()}" data-phone="${(d.phone || '').replace(/\D/g, '')}" data-van="${(d.van_no || '').toLowerCase()} ${(d.label || '').toLowerCase()}">
                 <div>
                   <div class="flex items-center justify-between">
                     <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">
@@ -246,38 +277,60 @@ class DirectoriesPage {
           </div>
         </div>
 
-        <!-- 3. STAFF DIRECTORY (NON-GATE STAFF ADDED PERSONALLY — ASKS ONLY FOR NAME OR SCAN QR) -->
+        <!-- ========================================== -->
+        <!-- 3. STAFF DIRECTORY (SEARCH STRICTLY BY NAME) -->
+        <!-- ========================================== -->
         <div id="grid-staff" class="${initialTab === 'staff' ? '' : 'hidden '}space-y-4 animate-fade-in-up">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-200 dark:border-slate-800">
             <div>
-              <h2 class="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                <span>👔 Personally Added Staff (${staff.length})</span>
+              <h2 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <span>👔 Personally Added Staff</span>
+                <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-mono font-bold" id="dir-staff-count-header">${staff.length}</span>
               </h2>
               <p class="text-[11px] text-slate-400 mt-0.5">Campus helpers, attendants, and non-gate staff passes.</p>
             </div>
-            <!-- Dual Add Options & Print All Staff QRs -->
-            <div class="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            <div class="flex items-center gap-2 flex-wrap">
               ${staff.length > 0 ? `
-                <button type="button" id="dir-print-all-staff-btn" class="cr-btn cr-btn-secondary text-xs py-2 px-3 shadow-sm flex items-center gap-1.5 cursor-pointer">
-                  <span>🖨️</span> <span>Print All Staff QRs</span>
+                <button type="button" id="dir-print-all-staff-btn" class="cr-btn cr-btn-secondary text-xs py-2 px-3 shadow-sm flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+                  <span>🖨️</span> <span>Print QRs</span>
                 </button>
               ` : ''}
-              <button type="button" id="open-scan-staff-qr-btn" class="cr-btn cr-btn-secondary text-xs py-2 px-3 shadow-sm flex items-center gap-1.5 cursor-pointer">
+              <button type="button" id="open-scan-staff-qr-btn" class="cr-btn cr-btn-secondary text-xs py-2 px-3 shadow-sm flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
                 <span>📷</span> <span>Scan QR</span>
               </button>
-              <button type="button" id="open-add-staff-modal-btn" class="cr-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 px-3.5 shadow-md flex items-center gap-1.5 cursor-pointer">
+              <button type="button" id="open-add-staff-modal-btn" class="cr-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 px-3.5 shadow-md flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
                 <span>➕</span> <span>Add Staff</span>
               </button>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Dedicated Search Bar for Staff (STRICTLY NAME ONLY) -->
+          <div class="cr-card p-3 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm flex items-center gap-3">
+            <div class="relative flex-1">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-sm">
+                🔍
+              </div>
+              <input type="text" id="dir-search-staff" placeholder="Search staff by full name only (e.g. Ginzy Cherlan)..."
+                     class="w-full text-xs sm:text-sm py-2.5 pl-10 pr-9 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner" />
+              <button type="button" id="dir-clear-staff-search" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs font-bold cursor-pointer p-1">✕</button>
+            </div>
+            <div class="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0 hidden sm:block">
+              <span id="dir-staff-filter-count">${staff.length}</span> staff found
+            </div>
+          </div>
+
+          <div id="dir-staff-no-results" class="hidden cr-card p-12 text-center text-slate-400 text-xs">
+            No staff members found matching "<span class="search-term font-semibold text-slate-700 dark:text-slate-200"></span>".
+          </div>
+
+          <div id="dir-staff-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             ${staff.length === 0 ? `
               <div class="col-span-full cr-card p-12 text-center text-slate-400 text-xs">
                 No personally added staff yet. Click <b>"➕ Add Staff"</b> or <b>"📷 Scan QR"</b> above.
               </div>
             ` : staff.map(s => `
-              <div class="cr-card p-5 space-y-3 border-l-4 border-l-emerald-500 flex flex-col justify-between">
+              <div class="dir-staff-card cr-card p-5 space-y-3 border-l-4 border-l-emerald-500 flex flex-col justify-between"
+                   data-name="${(s.driver_name || '').toLowerCase()}" data-label="${(s.label || '').toLowerCase()}">
                 <div>
                   <div class="flex items-center justify-between">
                     <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
@@ -418,28 +471,28 @@ class DirectoriesPage {
 
       // Update Parent Tab button
       if (tab === 'parents') {
-        tabParents.className = 'py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer select-none flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow-md';
+        tabParents.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-md';
         gridParents.classList.remove('hidden');
       } else {
-        tabParents.className = 'py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer select-none flex items-center justify-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
+        tabParents.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
         gridParents.classList.add('hidden');
       }
 
       // Update Driver Tab button
       if (tab === 'drivers') {
-        tabDrivers.className = 'py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer select-none flex items-center justify-center gap-1.5 bg-amber-500 text-white shadow-md';
+        tabDrivers.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 bg-amber-500 text-white shadow-md';
         gridDrivers.classList.remove('hidden');
       } else {
-        tabDrivers.className = 'py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer select-none flex items-center justify-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
+        tabDrivers.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
         gridDrivers.classList.add('hidden');
       }
 
       // Update Staff Tab button
       if (tab === 'staff') {
-        tabStaff.className = 'py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer select-none flex items-center justify-center gap-1.5 bg-emerald-600 text-white shadow-md';
+        tabStaff.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 bg-emerald-600 text-white shadow-md';
         gridStaff.classList.remove('hidden');
       } else {
-        tabStaff.className = 'py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer select-none flex items-center justify-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
+        tabStaff.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer select-none flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
         gridStaff.classList.add('hidden');
       }
     }
@@ -447,6 +500,155 @@ class DirectoriesPage {
     if (tabParents) tabParents.onclick = () => setActiveTab('parents');
     if (tabDrivers) tabDrivers.onclick = () => setActiveTab('drivers');
     if (tabStaff) tabStaff.onclick = () => setActiveTab('staff');
+
+    // ==========================================
+    // Real-Time Search Handlers for All 3 Tabs
+    // ==========================================
+
+    // 1. PARENTS SEARCH (By Name or Phone)
+    const searchParents = document.getElementById('dir-search-parents');
+    const clearParents = document.getElementById('dir-clear-parents-search');
+    const parentsCountHeader = document.getElementById('dir-parents-count-header');
+    const parentsFilterCount = document.getElementById('dir-parents-filter-count');
+    const parentsNoRes = document.getElementById('dir-parents-no-results');
+    const parentCards = document.querySelectorAll('#dir-parents-list .dir-parent-card');
+
+    if (searchParents) {
+      const filterParents = () => {
+        const query = searchParents.value.trim().toLowerCase();
+        const digits = query.replace(/\D/g, '');
+        if (clearParents) clearParents.classList.toggle('hidden', !query);
+
+        let visible = 0;
+        parentCards.forEach(card => {
+          const name = card.getAttribute('data-name') || '';
+          const phone = card.getAttribute('data-phone') || '';
+          const match = !query || name.includes(query) || (digits.length >= 3 && phone.includes(digits));
+          card.style.display = match ? '' : 'none';
+          if (match) visible++;
+        });
+
+        if (parentsNoRes) {
+          parentsNoRes.classList.toggle('hidden', visible > 0 || !query);
+          const term = parentsNoRes.querySelector('.search-term');
+          if (term) term.textContent = searchParents.value.trim();
+        }
+
+        const total = parentCards.length;
+        if (parentsCountHeader) {
+          parentsCountHeader.textContent = query ? `${visible} / ${total}` : total;
+        }
+        if (parentsFilterCount) {
+          parentsFilterCount.textContent = visible;
+        }
+      };
+
+      searchParents.addEventListener('input', filterParents);
+      if (clearParents) {
+        clearParents.onclick = () => {
+          searchParents.value = '';
+          filterParents();
+          searchParents.focus();
+        };
+      }
+    }
+
+    // 2. DRIVERS SEARCH (By Name, Phone, or Van No)
+    const searchDrivers = document.getElementById('dir-search-drivers');
+    const clearDrivers = document.getElementById('dir-clear-drivers-search');
+    const driversCountHeader = document.getElementById('dir-drivers-count-header');
+    const driversFilterCount = document.getElementById('dir-drivers-filter-count');
+    const driversNoRes = document.getElementById('dir-drivers-no-results');
+    const driverCards = document.querySelectorAll('#dir-drivers-list .dir-driver-card');
+
+    if (searchDrivers) {
+      const filterDrivers = () => {
+        const query = searchDrivers.value.trim().toLowerCase();
+        const digits = query.replace(/\D/g, '');
+        if (clearDrivers) clearDrivers.classList.toggle('hidden', !query);
+
+        let visible = 0;
+        driverCards.forEach(card => {
+          const name = card.getAttribute('data-name') || '';
+          const phone = card.getAttribute('data-phone') || '';
+          const van = card.getAttribute('data-van') || '';
+          const match = !query || name.includes(query) || van.includes(query) || (digits.length >= 3 && phone.includes(digits));
+          card.style.display = match ? '' : 'none';
+          if (match) visible++;
+        });
+
+        if (driversNoRes) {
+          driversNoRes.classList.toggle('hidden', visible > 0 || !query);
+          const term = driversNoRes.querySelector('.search-term');
+          if (term) term.textContent = searchDrivers.value.trim();
+        }
+
+        const total = driverCards.length;
+        if (driversCountHeader) {
+          driversCountHeader.textContent = query ? `${visible} / ${total}` : total;
+        }
+        if (driversFilterCount) {
+          driversFilterCount.textContent = visible;
+        }
+      };
+
+      searchDrivers.addEventListener('input', filterDrivers);
+      if (clearDrivers) {
+        clearDrivers.onclick = () => {
+          searchDrivers.value = '';
+          filterDrivers();
+          searchDrivers.focus();
+        };
+      }
+    }
+
+    // 3. STAFF SEARCH (STRICTLY BY FULL NAME ONLY as requested!)
+    const searchStaff = document.getElementById('dir-search-staff');
+    const clearStaff = document.getElementById('dir-clear-staff-search');
+    const staffCountHeader = document.getElementById('dir-staff-count-header');
+    const staffFilterCount = document.getElementById('dir-staff-filter-count');
+    const staffNoRes = document.getElementById('dir-staff-no-results');
+    const staffCards = document.querySelectorAll('#dir-staff-list .dir-staff-card');
+
+    if (searchStaff) {
+      const filterStaff = () => {
+        const query = searchStaff.value.trim().toLowerCase();
+        if (clearStaff) clearStaff.classList.toggle('hidden', !query);
+
+        let visible = 0;
+        staffCards.forEach(card => {
+          const name = card.getAttribute('data-name') || '';
+          const label = card.getAttribute('data-label') || '';
+          // Strictly search by name (or Staff # label), NO phone search
+          const match = !query || name.includes(query) || label.includes(query);
+          card.style.display = match ? '' : 'none';
+          if (match) visible++;
+        });
+
+        if (staffNoRes) {
+          staffNoRes.classList.toggle('hidden', visible > 0 || !query);
+          const term = staffNoRes.querySelector('.search-term');
+          if (term) term.textContent = searchStaff.value.trim();
+        }
+
+        const total = staffCards.length;
+        if (staffCountHeader) {
+          staffCountHeader.textContent = query ? `${visible} / ${total}` : total;
+        }
+        if (staffFilterCount) {
+          staffFilterCount.textContent = visible;
+        }
+      };
+
+      searchStaff.addEventListener('input', filterStaff);
+      if (clearStaff) {
+        clearStaff.onclick = () => {
+          searchStaff.value = '';
+          filterStaff();
+          searchStaff.focus();
+        };
+      }
+    }
 
     // Add Staff Modal Controls
     const modal = document.getElementById('add-staff-modal');
@@ -476,80 +678,23 @@ class DirectoriesPage {
     if (closeBtn) closeBtn.onclick = closeModal;
     if (cancelBtn) cancelBtn.onclick = closeModal;
 
-    // QR SCANNER TO ADD STAFF (STRICT SUFFICIENCY CHECK)
-    const scanQrBtn = document.getElementById('open-scan-staff-qr-btn');
-    if (scanQrBtn) {
-      scanQrBtn.onclick = () => {
-        if (!window.CameraScannerModal) {
-          window.showToast('Camera scanner component not available.', 'error');
-          return;
-        }
-
-        const scanner = new window.CameraScannerModal({
-          title: 'Scan Staff Registration QR',
-          subtitle: 'Scan a QR code containing the staff member\'s full name',
-          onScan: async (qrText) => {
-            scanner.close();
-            try {
-              window.showToast('Verifying QR information sufficiency...', 'info');
-              const res = await window.api.request('/api/scanner/register-qr', {
-                method: 'POST',
-                body: JSON.stringify({ text: qrText, type: 'staff' })
-              });
-
-              // Instantly persist in device storage so it survives redeployments
-              try {
-                const currentReg = JSON.parse(localStorage.getItem('campusride_persistent_staff_registry') || '[]');
-                const newMember = {
-                  id: res.id,
-                  label: res.label,
-                  driver_name: res.driver_name,
-                  van_no: res.van_no || 'Staff Pass',
-                  phone: res.phone || '',
-                  vehicle_type: 'walk_in',
-                  type: 'staff',
-                  created_at: new Date().toISOString()
-                };
-                if (!currentReg.some(s => s.id === res.id)) {
-                  currentReg.push(newMember);
-                  localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(currentReg));
-                }
-                const delIds = JSON.parse(localStorage.getItem('campusride_deleted_staff_ids') || '[]').filter(id => id !== res.id);
-                localStorage.setItem('campusride_deleted_staff_ids', JSON.stringify(delIds));
-              } catch (e) {}
-
-              window.showToast(`✅ Staff member "${res.driver_name}" added successfully as ${res.label}!`, 'success');
-
-              // Refresh Staff Directory View
-              DirectoriesPage.currentTab = 'staff';
-              const appEl = document.getElementById('app');
-              appEl.innerHTML = `
-                ${window.HeaderComponent.render(user)}
-                <main class="pb-24 sm:pb-12">
-                  ${await DirectoriesPage.render(user)}
-                </main>
-              `;
-              window.HeaderComponent.attachEvents(user);
-              DirectoriesPage.attachEvents(user);
-            } catch (err) {
-              // Insufficient info: Do NOT add, report error
-              window.showToast(err.message || 'Insufficient QR information. Not added.', 'error');
-            }
-          }
-        });
-        scanner.open();
+    // Scan QR button for adding staff
+    const scanBtn = document.getElementById('open-scan-staff-qr-btn');
+    if (scanBtn) {
+      scanBtn.onclick = () => {
+        window.location.hash = '#/registration-scanner?kind=staff';
       };
     }
 
-    // Submit Add Staff Form (ASKS ONLY FOR NAME)
-    const staffForm = document.getElementById('add-staff-form');
-    if (staffForm) {
-      staffForm.onsubmit = async (e) => {
+    // Submit Add Staff Form
+    const addForm = document.getElementById('add-staff-form');
+    if (addForm) {
+      addForm.onsubmit = async (e) => {
         e.preventDefault();
-        const name = (document.getElementById('add-staff-name').value || '').trim();
+        const nameInput = document.getElementById('add-staff-name');
+        const name = (nameInput?.value || '').trim();
         const submitBtn = document.getElementById('submit-add-staff-btn');
 
-        // Full Name Validation (Both first and last name required, e.g. Ramu Chandan)
         const parts = name.split(/\s+/).filter(Boolean);
         if (parts.length < 2 || parts[0].length < 2 || parts[1].length < 2) {
           window.showToast('Please enter full name (both first and last name, e.g. Ramu Chandan)', 'error');
@@ -557,42 +702,41 @@ class DirectoriesPage {
         }
 
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Adding Staff...';
+        submitBtn.textContent = 'Adding...';
 
         try {
           const res = await window.api.request('/api/drivers', {
             method: 'POST',
             body: JSON.stringify({
               driver_name: name,
-              type: 'staff'
+              type: 'staff',
+              van_no: 'Staff Pass',
+              phone: '',
+              vehicle_type: 'walk_in'
             })
           });
 
-          // Instantly persist in device storage so it survives redeployments
+          // Save new staff member locally
+          const newMember = {
+            id: res.id,
+            label: res.label,
+            type: 'staff',
+            driver_name: name,
+            van_no: 'Staff Pass',
+            phone: '',
+            vehicle_type: 'walk_in',
+            created_at: new Date().toISOString()
+          };
           try {
             const currentReg = JSON.parse(localStorage.getItem('campusride_persistent_staff_registry') || '[]');
-            const newMember = {
-              id: res.id,
-              label: res.label,
-              driver_name: res.driver_name || name,
-              van_no: res.van_no || 'Staff Pass',
-              phone: res.phone || '',
-              vehicle_type: 'walk_in',
-              type: 'staff',
-              created_at: res.created_at || new Date().toISOString()
-            };
-            if (!currentReg.some(s => s.id === res.id)) {
-              currentReg.push(newMember);
-              localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(currentReg));
-            }
-            const delIds = JSON.parse(localStorage.getItem('campusride_deleted_staff_ids') || '[]').filter(id => id !== res.id);
-            localStorage.setItem('campusride_deleted_staff_ids', JSON.stringify(delIds));
+            currentReg.push(newMember);
+            localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(currentReg));
           } catch (e) {}
 
-          window.showToast(`Staff member "${name}" successfully registered as ${res.label}!`, 'success');
+          window.showToast(`Staff member "${name}" registered as ${res.label}!`, 'success');
           closeModal();
 
-          // Refresh page view maintaining the Staff tab
+          // Refresh Staff Directory view
           DirectoriesPage.currentTab = 'staff';
           const appEl = document.getElementById('app');
           appEl.innerHTML = `
@@ -601,38 +745,38 @@ class DirectoriesPage {
               ${await DirectoriesPage.render(user)}
             </main>
           `;
-          window.HeaderComponent.attachEvents(user);
           DirectoriesPage.attachEvents(user);
         } catch (err) {
-          window.showToast(err.message, 'error');
+          window.showToast(err.message || 'Failed to add staff', 'error');
           submitBtn.disabled = false;
           submitBtn.textContent = '➕ Add Staff Member';
         }
       };
     }
 
-    // Delete Personally Added Staff
-    document.querySelectorAll('.dir-delete-staff-btn').forEach(btn => {
-      btn.onclick = async () => {
+    // Delete Staff Handlers
+    const deleteBtns = document.querySelectorAll('.dir-delete-staff-btn');
+    deleteBtns.forEach(btn => {
+      btn.onclick = async (e) => {
+        e.stopPropagation();
         const id = btn.getAttribute('data-id');
-        const name = btn.getAttribute('data-name');
-        if (!confirm(`Are you sure you want to remove staff pass for "${name}"?`)) return;
+        const name = btn.getAttribute('data-name') || 'this staff member';
+        if (!confirm(`Are you sure you want to remove "${name}" from the staff directory?`)) {
+          return;
+        }
 
         try {
           await window.api.request(`/api/drivers/${id}`, { method: 'DELETE' });
 
-          // Remove from device storage and mark ID as explicitly deleted
           try {
-            const currentReg = JSON.parse(localStorage.getItem('campusride_persistent_staff_registry') || '[]').filter(s => s.id !== id);
-            localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(currentReg));
-            const delIds = JSON.parse(localStorage.getItem('campusride_deleted_staff_ids') || '[]');
-            if (!delIds.includes(id)) delIds.push(id);
-            localStorage.setItem('campusride_deleted_staff_ids', JSON.stringify(delIds));
+            const currentReg = JSON.parse(localStorage.getItem('campusride_persistent_staff_registry') || '[]');
+            const updatedReg = currentReg.filter(s => s.id !== id);
+            localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(updatedReg));
           } catch (e) {}
 
-          window.showToast(`Staff pass for "${name}" removed.`, 'success');
+          window.showToast(`Removed "${name}" from staff directory.`, 'info');
 
-          // Refresh page view maintaining the Staff tab
+          // Refresh Staff Directory view
           DirectoriesPage.currentTab = 'staff';
           const appEl = document.getElementById('app');
           appEl.innerHTML = `
@@ -641,86 +785,122 @@ class DirectoriesPage {
               ${await DirectoriesPage.render(user)}
             </main>
           `;
-          window.HeaderComponent.attachEvents(user);
           DirectoriesPage.attachEvents(user);
         } catch (err) {
-          window.showToast(err.message, 'error');
+          window.showToast(err.message || 'Failed to delete staff member', 'error');
         }
       };
     });
 
-    // View QR Pass Buttons
-    document.querySelectorAll('.dir-view-driver-pass-btn, .dir-view-staff-pass-btn').forEach(btn => {
-      btn.onclick = () => {
+    // View Pass Buttons
+    const viewDriverBtns = document.querySelectorAll('.dir-view-driver-pass-btn');
+    viewDriverBtns.forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
         const id = btn.getAttribute('data-id');
         const label = btn.getAttribute('data-label');
         const name = btn.getAttribute('data-name');
         const plate = btn.getAttribute('data-plate');
         const phone = btn.getAttribute('data-phone');
-        if (window.showDriverPassQRModal) {
-          window.showDriverPassQRModal({ id, label, name, plate, phone });
+        if (typeof window.showPassModal === 'function') {
+          window.showPassModal({ id, label, name, plate, phone, type: 'van' });
         }
       };
     });
 
-    // Bulk Print QRs for Drivers (Max 6 per A4 sheet)
-    const printDriversBtn = document.getElementById('dir-print-all-drivers-btn');
-    if (printDriversBtn) {
-      printDriversBtn.onclick = () => {
-        if (!window.printBulkPasses) {
-          return window.showToast('Printing component not loaded.', 'error');
+    const viewStaffBtns = document.querySelectorAll('.dir-view-staff-pass-btn');
+    viewStaffBtns.forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const id = btn.getAttribute('data-id');
+        const label = btn.getAttribute('data-label');
+        const name = btn.getAttribute('data-name');
+        const plate = btn.getAttribute('data-plate') || 'Staff Pass';
+        const phone = btn.getAttribute('data-phone') || '';
+        if (typeof window.showPassModal === 'function') {
+          window.showPassModal({ id, label, name, plate, phone, type: 'staff' });
         }
-        window.printBulkPasses('CampusRide — Transport Drivers Passes', DirectoriesPage.currentDrivers || []);
+      };
+    });
+
+    // Bulk Print All Driver QRs
+    const printAllDriversBtn = document.getElementById('dir-print-all-drivers-btn');
+    if (printAllDriversBtn) {
+      printAllDriversBtn.onclick = () => {
+        const driversList = DirectoriesPage.currentDrivers || [];
+        if (driversList.length === 0) {
+          window.showToast('No drivers to print', 'info');
+          return;
+        }
+        if (typeof window.printBulkPasses === 'function') {
+          window.printBulkPasses(driversList.map(d => ({
+            id: d.id,
+            label: d.label,
+            name: d.driver_name,
+            number: d.van_no
+          })), 'All Drivers');
+        }
       };
     }
 
-    // Bulk Print QRs for Staff (Max 6 per A4 sheet)
-    const printStaffBtn = document.getElementById('dir-print-all-staff-btn');
-    if (printStaffBtn) {
-      printStaffBtn.onclick = () => {
-        if (!window.printBulkPasses) {
-          return window.showToast('Printing component not loaded.', 'error');
+    // Bulk Print All Staff QRs
+    const printAllStaffBtn = document.getElementById('dir-print-all-staff-btn');
+    if (printAllStaffBtn) {
+      printAllStaffBtn.onclick = () => {
+        const staffList = DirectoriesPage.currentStaff || [];
+        if (staffList.length === 0) {
+          window.showToast('No staff to print', 'info');
+          return;
         }
-        window.printBulkPasses('CampusRide — Personally Added Staff Passes', DirectoriesPage.currentStaff || []);
+        if (typeof window.printBulkPasses === 'function') {
+          window.printBulkPasses(staffList.map(s => ({
+            id: s.id,
+            label: s.label,
+            name: s.driver_name,
+            number: s.phone || s.label
+          })), 'All Staff');
+        }
       };
     }
 
-    // Edit Staff Modal Controls & Submission
+    // Edit Staff Modal Controls
     const editModal = document.getElementById('edit-staff-modal');
     const closeEditBtn = document.getElementById('close-edit-staff-modal-btn');
     const cancelEditBtn = document.getElementById('cancel-edit-staff-btn');
     const editForm = document.getElementById('edit-staff-form');
 
+    const openEditModal = (staffMember) => {
+      if (!editModal) return;
+      document.getElementById('edit-staff-id').value = staffMember.id;
+      document.getElementById('edit-staff-name').value = staffMember.name;
+      document.getElementById('edit-staff-phone').value = staffMember.phone || '';
+      document.getElementById('edit-staff-label-badge').textContent = staffMember.label;
+
+      editModal.classList.remove('hidden');
+      editModal.classList.add('flex');
+      const nameInput = document.getElementById('edit-staff-name');
+      if (nameInput) setTimeout(() => nameInput.focus(), 50);
+    };
+
     const closeEditModal = () => {
-      if (editModal) {
-        editModal.classList.add('hidden');
-        editModal.classList.remove('flex');
-        if (editForm) editForm.reset();
-      }
+      if (!editModal) return;
+      editModal.classList.add('hidden');
+      editModal.classList.remove('flex');
+      if (editForm) editForm.reset();
     };
 
     if (closeEditBtn) closeEditBtn.onclick = closeEditModal;
     if (cancelEditBtn) cancelEditBtn.onclick = closeEditModal;
 
-    document.querySelectorAll('.dir-edit-staff-btn').forEach(btn => {
-      btn.onclick = () => {
+    const editBtns = document.querySelectorAll('.dir-edit-staff-btn');
+    editBtns.forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
         const id = btn.getAttribute('data-id');
-        const name = btn.getAttribute('data-name') || '';
-        const phone = btn.getAttribute('data-phone') || '';
-        const label = btn.getAttribute('data-label') || '';
-
-        document.getElementById('edit-staff-id').value = id;
-        document.getElementById('edit-staff-name').value = name;
-        document.getElementById('edit-staff-phone').value = phone;
-        const badge = document.getElementById('edit-staff-label-badge');
-        if (badge) badge.textContent = label;
-
-        if (editModal) {
-          editModal.classList.remove('hidden');
-          editModal.classList.add('flex');
-          const nameInput = document.getElementById('edit-staff-name');
-          if (nameInput) setTimeout(() => nameInput.focus(), 50);
-        }
+        const label = btn.getAttribute('data-label');
+        const name = btn.getAttribute('data-name');
+        const phone = btn.getAttribute('data-phone');
+        openEditModal({ id, label, name, phone });
       };
     });
 
@@ -728,8 +908,8 @@ class DirectoriesPage {
       editForm.onsubmit = async (e) => {
         e.preventDefault();
         const id = document.getElementById('edit-staff-id').value;
-        const name = (document.getElementById('edit-staff-name').value || '').trim();
-        const phone = (document.getElementById('edit-staff-phone').value || '').trim();
+        const name = document.getElementById('edit-staff-name').value.trim();
+        const phone = document.getElementById('edit-staff-phone').value.trim();
         const submitBtn = document.getElementById('submit-edit-staff-btn');
 
         const parts = name.split(/\s+/).filter(Boolean);
@@ -773,7 +953,6 @@ class DirectoriesPage {
               ${await DirectoriesPage.render(user)}
             </main>
           `;
-          window.HeaderComponent.attachEvents(user);
           DirectoriesPage.attachEvents(user);
         } catch (err) {
           window.showToast(err.message || 'Failed to update staff info', 'error');

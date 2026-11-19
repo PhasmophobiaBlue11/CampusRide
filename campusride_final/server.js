@@ -1146,6 +1146,12 @@ const server = http.createServer(async (req, res) => {
       // DRIVERS & STAFF REGISTRY: Bulk-sync / restore from device storage (§Indestructible Staff)
       if (pathname === '/api/drivers/sync' && req.method === 'POST') {
         if (!user) return sendError(res, 401, 'Unauthorized');
+        const countRow = db.prepare("SELECT count(*) as count FROM drivers WHERE type = 'staff'").get();
+        // If server already has authoritative staff, do not inject stale records
+        if (countRow && countRow.count > 0) {
+          const currentStaff = db.prepare("SELECT * FROM drivers WHERE type = 'staff' ORDER BY CAST(SUBSTR(label, INSTR(label, ' ') + 1) AS INTEGER) ASC, label ASC").all();
+          return sendJson(res, 200, { success: true, staff: currentStaff, message: 'Server already has authoritative staff list' });
+        }
         const { staffList } = await readJsonBody(req);
         if (Array.isArray(staffList)) {
           const insertStmt = db.prepare(`

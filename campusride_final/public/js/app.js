@@ -505,6 +505,15 @@
   // Background helper to ensure persistent staff passes stored on user's device survive server redeployments (§Indestructible Staff)
   window.syncPersistentStaffRegistry = async function() {
     try {
+      const res = await window.api.request('/api/drivers');
+      const serverStaff = (res.drivers || []).filter(d => d.type === 'staff');
+      if (serverStaff.length > 0) {
+        // Server already has authoritative staff (103 staff)! Cleanse client storage to match
+        localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(serverStaff));
+        return;
+      }
+
+      // Only if server is completely empty (0 staff), restore from device storage
       const raw = localStorage.getItem('campusride_persistent_staff_registry');
       if (!raw) return;
       const localStaff = JSON.parse(raw);
