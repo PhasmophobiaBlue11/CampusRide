@@ -336,6 +336,17 @@
       return;
     }
 
+    // 4. Admin Isolation: Admin can ONLY access Staff Approvals (#/admin) and Settings (#/settings)
+    // Admin CANNOT access parent accounts, gate pass scanner, drivers directory, or pass registers
+    if (isAdmin) {
+      const allowedAdminPaths = ['/', '', '/admin', '/settings'];
+      if (!allowedAdminPaths.includes(path)) {
+        window.showToast('Administrator access is restricted to Staff Approvals only.', 'info');
+        window.location.hash = '#/admin';
+        return;
+      }
+    }
+
     // Pending Staff Gate Screen (§2, §4.1)
     if (user.role !== 'admin' && !user.driverProfile && !user.parentProfile && user.staffStatus !== 'approved') {
       appEl.innerHTML = `
@@ -453,27 +464,15 @@
         </nav>
       `;
     } else if (isAdmin) {
-      // 🛡️ Admin Suite Navigation
+      // 🛡️ Admin Suite Navigation (Staff Approvals & Settings Only)
       bottomNavHtml = `
-        <nav class="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-2 py-2 flex items-center justify-around text-[10px] font-bold text-slate-500 shadow-lg">
-          <a href="#/" class="flex flex-col items-center gap-1 ${path === '/' || path === '' || path === '/admin' ? 'text-purple-600 dark:text-purple-400' : 'hover:text-slate-900 dark:hover:text-white'}">
-            <span class="text-lg">🛡️</span>
-            <span>Admin</span>
-          </a>
-          <a href="#/entry-exit-scanner" class="flex flex-col items-center gap-1 ${path === '/entry-exit-scanner' ? 'text-purple-600 dark:text-purple-400' : 'hover:text-slate-900 dark:hover:text-white'}">
-            <span class="text-lg">📷</span>
-            <span>Gate Scan</span>
-          </a>
-          <a href="#/drivers" class="flex flex-col items-center gap-1 ${path === '/drivers' ? 'text-purple-600 dark:text-purple-400' : 'hover:text-slate-900 dark:hover:text-white'}">
-            <span class="text-lg">🚌</span>
-            <span>Drivers</span>
-          </a>
-          <a href="#/parents" class="flex flex-col items-center gap-1 ${path === '/directories' || path === '/parents' ? 'text-purple-600 dark:text-purple-400' : 'hover:text-slate-900 dark:hover:text-white'}">
-            <span class="text-lg">👨‍👩‍👧</span>
-            <span>Parents</span>
+        <nav class="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-4 py-2 flex items-center justify-around text-[10px] font-bold text-slate-500 shadow-lg">
+          <a href="#/admin" class="flex flex-col items-center gap-1 ${path === '/' || path === '' || path === '/admin' ? 'text-purple-600 dark:text-purple-400' : 'hover:text-slate-900 dark:hover:text-white'}">
+            <span class="text-xl">🛡️</span>
+            <span>Approvals</span>
           </a>
           <a href="#/settings" class="flex flex-col items-center gap-1 ${path === '/settings' ? 'text-purple-600 dark:text-purple-400' : 'hover:text-slate-900 dark:hover:text-white'}">
-            <span class="text-lg">⚙️</span>
+            <span class="text-xl">⚙️</span>
             <span>Settings</span>
           </a>
         </nav>
