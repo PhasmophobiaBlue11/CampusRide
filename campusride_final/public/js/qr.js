@@ -360,8 +360,8 @@ window.showPassModal = function({ id, label, name, plate, phone, type }) {
   const isRawId = (str) => typeof str === 'string' && (str.startsWith('drv_') || str.startsWith('usr_') || str.startsWith('id_') || str.length > 25);
   const cleanLabel = (label && !isRawId(label)) ? label : (isStaff ? 'Staff Pass' : 'Vehicle Pass');
   const cleanName = (name && !isRawId(name)) ? name : (isStaff ? 'Campus Staff' : 'Transit Driver');
-  const cleanPlate = (plate && !isRawId(plate) && plate !== 'Staff Pass') ? plate : '';
-  const numberText = isStaff ? cleanLabel : (cleanLabel + (cleanPlate ? ` • ${cleanPlate}` : ''));
+  const cleanPlate = (plate && !isRawId(plate) && plate !== 'Staff Pass' && plate !== 'STAFF PASS') ? plate : '';
+  const numberText = cleanPlate ? `${cleanLabel} • ${cleanPlate}` : cleanLabel;
 
   // Remove any previously open pass modal to prevent duplicates
   const existing = document.getElementById('campusride-pass-modal');

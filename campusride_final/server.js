@@ -1140,10 +1140,15 @@ const server = http.createServer(async (req, res) => {
         }
 
         const kind = type === 'staff' ? 'staff' : 'van';
-        const roleOrPlate = (van_no || designation || duty || (kind === 'staff' ? 'Staff Pass' : '')).trim().toUpperCase();
+        const roleOrPlate = (van_no || designation || duty || '').trim().toUpperCase();
+        if (kind === 'staff' && !roleOrPlate) {
+          return sendError(res, 400, 'Vehicle number is compulsory for staff members');
+        }
         if (kind === 'van' && !roleOrPlate) {
           return sendError(res, 400, 'Vehicle number is required');
         }
+
+        const cleanVehicleType = vehicle_type ? vehicle_type.trim() : (kind === 'staff' ? '' : '4_wheeler');
 
         const label = getNextLabel(kind);
         const id = generateId('drv');
@@ -1152,7 +1157,7 @@ const server = http.createServer(async (req, res) => {
         db.prepare(`
           INSERT INTO drivers (id, label, type, driver_name, license_number, van_no, phone, vehicle_type, raw_data, created_at)
           VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?)
-        `).run(id, label, kind, driver_name.trim(), roleOrPlate, phone || '', vehicle_type || (kind === 'staff' ? 'walk_in' : '4_wheeler'), `Name: ${driver_name}`, now);
+        `).run(id, label, kind, driver_name.trim(), roleOrPlate, phone || '', cleanVehicleType, `Name: ${driver_name}`, now);
 
         if (kind === 'van') {
           db.prepare(`
@@ -1162,14 +1167,14 @@ const server = http.createServer(async (req, res) => {
         }
 
         saveBackupJson();
-        broadcastEvent('driver_added', { id, label, driver_name: driver_name.trim(), van_no: roleOrPlate });
+        broadcastEvent('driver_added', { id, label, driver_name: driver_name.trim(), van_no: roleOrPlate, vehicle_type: cleanVehicleType });
         return sendJson(res, 201, {
           id,
           label,
           driver_name: driver_name.trim(),
           van_no: roleOrPlate,
           phone: phone || '',
-          vehicle_type: vehicle_type || (kind === 'staff' ? 'walk_in' : '4_wheeler'),
+          vehicle_type: cleanVehicleType,
           type: kind,
           created_at: now
         });
@@ -1202,7 +1207,7 @@ const server = http.createServer(async (req, res) => {
         const existing = db.prepare('SELECT * FROM drivers WHERE id = ?').get(driverId);
         if (!existing) return sendError(res, 404, 'Driver or staff member not found');
 
-        const { driver_name, phone, van_no } = await readJsonBody(req);
+        const { driver_name, phone, van_no, vehicle_type } = await readJsonBody(req);
         let updatedName = existing.driver_name;
         if (driver_name !== undefined) {
           const trimmed = (driver_name || '').trim();
@@ -1216,16 +1221,29 @@ const server = http.createServer(async (req, res) => {
         }
 
         const updatedPhone = phone !== undefined ? (phone || '').trim() : (existing.phone || '');
-        const updatedVanNo = van_no !== undefined ? (van_no || '').trim() : (existing.van_no || 'Staff Pass');
+        
+        let updatedVanNo = existing.van_no;
+        if (van_no !== undefined) {
+          const trimmedVan = (van_no || '').trim().toUpperCase();
+          if (existing.type === 'staff' && !trimmedVan) {
+            return sendError(res, 400, 'Vehicle number is compulsory for staff members');
+          }
+          updatedVanNo = trimmedVan;
+        }
+
+        let updatedVehicleType = existing.vehicle_type;
+        if (vehicle_type !== undefined) {
+          updatedVehicleType = (vehicle_type || '').trim();
+        }
 
         db.prepare(`
           UPDATE drivers 
-          SET driver_name = ?, phone = ?, van_no = ?, raw_data = ?
+          SET driver_name = ?, phone = ?, van_no = ?, vehicle_type = ?, raw_data = ?
           WHERE id = ?
-        `).run(updatedName, updatedPhone, updatedVanNo, `Name: ${updatedName}`, driverId);
+        `).run(updatedName, updatedPhone, updatedVanNo, updatedVehicleType, `Name: ${updatedName}`, driverId);
 
         saveBackupJson();
-        broadcastEvent('driver_updated', { id: driverId, label: existing.label, driver_name: updatedName });
+        broadcastEvent('driver_updated', { id: driverId, label: existing.label, driver_name: updatedName, van_no: updatedVanNo, vehicle_type: updatedVehicleType });
 
         const updated = db.prepare('SELECT * FROM drivers WHERE id = ?').get(driverId);
         return sendJson(res, 200, { success: true, driver: updated });

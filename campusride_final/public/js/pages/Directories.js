@@ -302,13 +302,13 @@ class DirectoriesPage {
             </div>
           </div>
 
-          <!-- Dedicated Search Bar for Staff (STRICTLY NAME ONLY) -->
+          <!-- Dedicated Search Bar for Staff -->
           <div class="cr-card p-3 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm flex items-center gap-3">
             <div class="relative flex-1">
               <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-sm">
                 🔍
               </div>
-              <input type="text" id="dir-search-staff" placeholder="Search staff by full name only (e.g. Ginzy Cherlan)..."
+              <input type="text" id="dir-search-staff" placeholder="Search staff by full name or vehicle number..."
                      class="w-full text-xs sm:text-sm py-2.5 pl-10 pr-9 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner" />
               <button type="button" id="dir-clear-staff-search" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs font-bold cursor-pointer p-1">✕</button>
             </div>
@@ -323,16 +323,22 @@ class DirectoriesPage {
               <div class="col-span-full cr-card p-12 text-center text-slate-400 text-xs">
                 No personally added staff yet. Click <b>"➕ Add Staff"</b> or <b>"📷 Scan QR"</b> above.
               </div>
-            ` : staff.map(s => `
+            ` : staff.map(s => {
+              const hasPlate = s.van_no && s.van_no !== 'Staff Pass' && s.van_no !== 'STAFF PASS';
+              const vehTypeBadge = s.vehicle_type === '2_wheeler' 
+                ? '🛵 2 Wheeler' 
+                : (s.vehicle_type === '4_wheeler' ? '🚗 4 Wheeler' : (hasPlate ? '🚗 Vehicle' : '🚶 Campus Staff Pass'));
+              const vehIcon = s.vehicle_type === '2_wheeler' ? '🛵' : '🚗';
+              return `
               <div class="dir-staff-card cr-card p-5 space-y-3 border-l-4 border-l-emerald-500 flex flex-col justify-between"
-                   data-name="${(s.driver_name || '').toLowerCase()}" data-label="${(s.label || '').toLowerCase()}">
+                   data-name="${(s.driver_name || '').toLowerCase()}" data-label="${(s.label || '').toLowerCase()}" data-van="${(hasPlate ? s.van_no : '').toLowerCase()}">
                 <div>
                   <div class="flex items-center justify-between">
                     <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
                       ${s.label}
                     </span>
-                    <span class="text-[10px] font-semibold text-slate-400 uppercase">
-                      🚶 Campus Staff Pass
+                    <span class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1">
+                      ${vehTypeBadge}
                     </span>
                   </div>
 
@@ -341,6 +347,12 @@ class DirectoriesPage {
                     <div class="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mt-0.5">
                       Role: Campus Staff
                     </div>
+                    ${hasPlate ? `
+                      <div class="text-xs font-mono font-bold text-slate-800 dark:text-slate-200 mt-1.5 flex items-center gap-1.5">
+                        <span>${vehIcon}</span>
+                        <span class="tracking-wide">${s.van_no}</span>
+                      </div>
+                    ` : ''}
                     ${s.phone ? `
                       <div class="text-xs text-slate-500 mt-1">📞 ${s.phone}</div>
                     ` : ''}
@@ -354,11 +366,11 @@ class DirectoriesPage {
                     </a>
                   ` : ''}
                   <button type="button" class="dir-edit-staff-btn cr-btn cr-btn-secondary flex-1 py-1.5 text-xs text-center font-bold cursor-pointer select-none"
-                          data-id="${s.id}" data-label="${s.label}" data-name="${s.driver_name}" data-phone="${s.phone || ''}">
+                          data-id="${s.id}" data-label="${s.label}" data-name="${s.driver_name}" data-phone="${s.phone || ''}" data-van="${hasPlate ? s.van_no : ''}" data-vehicle-type="${s.vehicle_type || ''}">
                     ✏️ Edit
                   </button>
                   <button type="button" class="dir-view-staff-pass-btn cr-btn cr-btn-secondary flex-1 py-1.5 text-xs text-center font-bold cursor-pointer select-none"
-                          data-id="${s.id}" data-label="${s.label}" data-name="${s.driver_name}" data-plate="Staff Pass" data-phone="${s.phone || ''}">
+                          data-id="${s.id}" data-label="${s.label}" data-name="${s.driver_name}" data-plate="${hasPlate ? s.van_no : ''}" data-phone="${s.phone || ''}">
                     🎟️ View Pass
                   </button>
                   <button type="button" class="dir-delete-staff-btn p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer select-none"
@@ -367,11 +379,12 @@ class DirectoriesPage {
                   </button>
                 </div>
               </div>
-            `).join('')}
+            `;
+            }).join('')}
           </div>
         </div>
 
-        <!-- MODAL: ADD STAFF PERSONALLY (ASKS ONLY FOR NAME — NO VEHICLE NO, NO PHONE NO) -->
+        <!-- MODAL: ADD STAFF PERSONALLY -->
         <div id="add-staff-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden items-center justify-center p-4">
           <div class="cr-card max-w-md w-full p-6 space-y-4 shadow-2xl animate-fade-in-up border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
             <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
@@ -390,7 +403,33 @@ class DirectoriesPage {
                   Staff Full Name <span class="text-rose-500">*</span>
                 </label>
                 <input type="text" id="add-staff-name" required class="cr-input text-base font-semibold" placeholder="e.g. Ramu Chandan" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
-                <p class="text-[10px] text-slate-400 mt-1">Please enter full name (both first and last name). No vehicle or phone number is required.</p>
+                <p class="text-[10px] text-slate-400 mt-1">Full name requires both first and last name.</p>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Vehicle Number <span class="text-rose-500">*</span>
+                </label>
+                <input type="text" id="add-staff-vehicle-no" required class="cr-input uppercase font-mono tracking-wider font-semibold" placeholder="e.g. MH 31 AB 1234" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
+                <p class="text-[10px] text-slate-400 mt-1">Compulsory. Enter the vehicle registration number.</p>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Vehicle Type <span class="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <select id="add-staff-vehicle-type" class="cr-input">
+                  <option value="">Select vehicle type (optional)</option>
+                  <option value="4_wheeler">🚗 4 Wheeler (Car / SUV / Van)</option>
+                  <option value="2_wheeler">🛵 2 Wheeler (Bike / Scooter)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Phone Number <span class="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <input type="tel" id="add-staff-phone" class="cr-input font-mono" placeholder="e.g. 9876543210" autocomplete="off" />
               </div>
 
               <div class="pt-2 flex items-center justify-end gap-2">
@@ -431,7 +470,26 @@ class DirectoriesPage {
 
               <div>
                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Phone Number (Optional)
+                  Vehicle Number <span class="text-rose-500">*</span>
+                </label>
+                <input type="text" id="edit-staff-vehicle-no" required class="cr-input uppercase font-mono tracking-wider font-semibold" placeholder="e.g. MH 31 AB 1234" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
+                <p class="text-[10px] text-slate-400 mt-1">Compulsory. Enter the vehicle registration number.</p>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Vehicle Type <span class="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <select id="edit-staff-vehicle-type" class="cr-input">
+                  <option value="">Select vehicle type (optional)</option>
+                  <option value="4_wheeler">🚗 4 Wheeler (Car / SUV / Van)</option>
+                  <option value="2_wheeler">🛵 2 Wheeler (Bike / Scooter)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Phone Number <span class="text-slate-400 font-normal">(Optional)</span>
                 </label>
                 <input type="tel" id="edit-staff-phone" class="cr-input font-mono" placeholder="e.g. 9876543210" autocomplete="off" />
               </div>
@@ -577,7 +635,7 @@ class DirectoriesPage {
       }
     }
 
-    // 3. STAFF SEARCH (STRICTLY BY FULL NAME ONLY as requested!)
+    // 3. STAFF SEARCH (By Full Name, Label, or Vehicle Number)
     const searchStaff = document.getElementById('dir-search-staff');
     const clearStaff = document.getElementById('dir-clear-staff-search');
     const staffNoRes = document.getElementById('dir-staff-no-results');
@@ -592,8 +650,8 @@ class DirectoriesPage {
         staffCards.forEach(card => {
           const name = card.getAttribute('data-name') || '';
           const label = card.getAttribute('data-label') || '';
-          // Strictly search by name (or Staff # label), NO phone search
-          const match = !query || name.includes(query) || label.includes(query);
+          const van = card.getAttribute('data-van') || '';
+          const match = !query || name.includes(query) || label.includes(query) || van.includes(query);
           card.style.display = match ? '' : 'none';
           if (match) visible++;
         });
@@ -657,12 +715,24 @@ class DirectoriesPage {
       addForm.onsubmit = async (e) => {
         e.preventDefault();
         const nameInput = document.getElementById('add-staff-name');
+        const vehicleInput = document.getElementById('add-staff-vehicle-no');
+        const typeSelect = document.getElementById('add-staff-vehicle-type');
+        const phoneInput = document.getElementById('add-staff-phone');
+
         const name = (nameInput?.value || '').trim();
+        const vehicleNo = (vehicleInput?.value || '').trim().toUpperCase();
+        const vehicleType = (typeSelect?.value || '').trim();
+        const phone = (phoneInput?.value || '').trim();
         const submitBtn = document.getElementById('submit-add-staff-btn');
 
         const parts = name.split(/\s+/).filter(Boolean);
         if (parts.length < 2 || parts[0].length < 2 || parts[1].length < 2) {
           window.showToast('Please enter full name (both first and last name, e.g. Ramu Chandan)', 'error');
+          return;
+        }
+
+        if (!vehicleNo) {
+          window.showToast('Vehicle number is compulsory for staff members', 'error');
           return;
         }
 
@@ -675,9 +745,9 @@ class DirectoriesPage {
             body: JSON.stringify({
               driver_name: name,
               type: 'staff',
-              van_no: 'Staff Pass',
-              phone: '',
-              vehicle_type: 'walk_in'
+              van_no: vehicleNo,
+              phone: phone,
+              vehicle_type: vehicleType
             })
           });
 
@@ -687,9 +757,9 @@ class DirectoriesPage {
             label: res.label,
             type: 'staff',
             driver_name: name,
-            van_no: 'Staff Pass',
-            phone: '',
-            vehicle_type: 'walk_in',
+            van_no: vehicleNo,
+            phone: phone,
+            vehicle_type: vehicleType,
             created_at: new Date().toISOString()
           };
           try {
@@ -777,12 +847,12 @@ class DirectoriesPage {
       const id = btn.getAttribute('data-id');
       const label = btn.getAttribute('data-label');
       const name = btn.getAttribute('data-name');
-      const plate = btn.getAttribute('data-plate') || 'Staff Pass';
+      const plate = btn.getAttribute('data-plate') || '';
       const phone = btn.getAttribute('data-phone') || '';
       if (typeof window.showPassModal === 'function') {
         window.showPassModal({ id, label, name, plate, phone, type: 'staff' });
       } else if (typeof window.showDriverPassQRModal === 'function') {
-        window.showDriverPassQRModal({ id, label, name, plate: 'Staff Pass', phone });
+        window.showDriverPassQRModal({ id, label, name, plate, phone });
       }
     };
 
@@ -873,12 +943,19 @@ class DirectoriesPage {
       document.getElementById('edit-staff-id').value = staffMember.id;
       document.getElementById('edit-staff-name').value = staffMember.name;
       document.getElementById('edit-staff-phone').value = staffMember.phone || '';
+      document.getElementById('edit-staff-vehicle-no').value = staffMember.van || '';
+      document.getElementById('edit-staff-vehicle-type').value = (staffMember.vehicleType === '2_wheeler' || staffMember.vehicleType === '4_wheeler') ? staffMember.vehicleType : '';
       document.getElementById('edit-staff-label-badge').textContent = staffMember.label;
 
       editModal.classList.remove('hidden');
       editModal.classList.add('flex');
-      const nameInput = document.getElementById('edit-staff-name');
-      if (nameInput) setTimeout(() => nameInput.focus(), 50);
+      const vanInput = document.getElementById('edit-staff-vehicle-no');
+      if (vanInput && !vanInput.value) {
+        setTimeout(() => vanInput.focus(), 50);
+      } else {
+        const nameInput = document.getElementById('edit-staff-name');
+        if (nameInput) setTimeout(() => nameInput.focus(), 50);
+      }
     };
 
     const closeEditModal = () => {
@@ -899,7 +976,9 @@ class DirectoriesPage {
         const label = btn.getAttribute('data-label');
         const name = btn.getAttribute('data-name');
         const phone = btn.getAttribute('data-phone');
-        openEditModal({ id, label, name, phone });
+        const van = btn.getAttribute('data-van') || '';
+        const vehicleType = btn.getAttribute('data-vehicle-type') || '';
+        openEditModal({ id, label, name, phone, van, vehicleType });
       };
     });
 
@@ -909,11 +988,18 @@ class DirectoriesPage {
         const id = document.getElementById('edit-staff-id').value;
         const name = document.getElementById('edit-staff-name').value.trim();
         const phone = document.getElementById('edit-staff-phone').value.trim();
+        const vehicleNo = document.getElementById('edit-staff-vehicle-no').value.trim().toUpperCase();
+        const vehicleType = document.getElementById('edit-staff-vehicle-type').value.trim();
         const submitBtn = document.getElementById('submit-edit-staff-btn');
 
         const parts = name.split(/\s+/).filter(Boolean);
         if (parts.length < 2 || parts[0].length < 2 || parts[1].length < 2) {
           window.showToast('Please enter full name (both first and last name, e.g. Ramu Chandan)', 'error');
+          return;
+        }
+
+        if (!vehicleNo) {
+          window.showToast('Vehicle number is compulsory for staff members', 'error');
           return;
         }
 
@@ -925,7 +1011,9 @@ class DirectoriesPage {
             method: 'PUT',
             body: JSON.stringify({
               driver_name: name,
-              phone: phone
+              phone: phone,
+              van_no: vehicleNo,
+              vehicle_type: vehicleType
             })
           });
 
@@ -936,6 +1024,8 @@ class DirectoriesPage {
             if (idx !== -1) {
               currentReg[idx].driver_name = name;
               currentReg[idx].phone = phone;
+              currentReg[idx].van_no = vehicleNo;
+              currentReg[idx].vehicle_type = vehicleType;
               localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(currentReg));
             }
           } catch (e) {}
