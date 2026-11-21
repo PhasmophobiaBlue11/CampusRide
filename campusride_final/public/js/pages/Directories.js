@@ -408,10 +408,10 @@ class DirectoriesPage {
 
               <div>
                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Vehicle Number <span class="text-rose-500">*</span>
+                  Vehicle License Plate Number <span class="text-rose-500">*</span>
                 </label>
-                <input type="text" id="add-staff-vehicle-no" required class="cr-input uppercase font-mono tracking-wider font-semibold" placeholder="e.g. MH 31 AB 1234" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
-                <p class="text-[10px] text-slate-400 mt-1">Compulsory. Enter the vehicle registration number.</p>
+                <input type="text" id="add-staff-vehicle-no" required minlength="6" class="cr-input uppercase tracking-wider font-mono font-bold text-center text-base" placeholder="__  __  __  ____" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" data-lpignore="true" />
+                <p class="text-[10px] text-slate-400 mt-1 text-center font-medium">Spaces fill automatically as you type (State, District, Series, Number)</p>
               </div>
 
               <div>
@@ -470,10 +470,10 @@ class DirectoriesPage {
 
               <div>
                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Vehicle Number <span class="text-rose-500">*</span>
+                  Vehicle License Plate Number <span class="text-rose-500">*</span>
                 </label>
-                <input type="text" id="edit-staff-vehicle-no" required class="cr-input uppercase font-mono tracking-wider font-semibold" placeholder="e.g. MH 31 AB 1234" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" />
-                <p class="text-[10px] text-slate-400 mt-1">Compulsory. Enter the vehicle registration number.</p>
+                <input type="text" id="edit-staff-vehicle-no" required minlength="6" class="cr-input uppercase tracking-wider font-mono font-bold text-center text-base" placeholder="__  __  __  ____" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" data-lpignore="true" />
+                <p class="text-[10px] text-slate-400 mt-1 text-center font-medium">Spaces fill automatically as you type (State, District, Series, Number)</p>
               </div>
 
               <div>
@@ -673,6 +673,65 @@ class DirectoriesPage {
       }
     }
 
+    // Auto-spacing & Capitalizing Indian License Plate Formatter (Identical to Driver Registration)
+    const attachPlateAutoFormatter = (inputEl) => {
+      if (!inputEl) return () => {};
+      let prevVal = inputEl.value || '';
+      let isBackspacing = false;
+
+      inputEl.addEventListener('keydown', (e) => {
+        isBackspacing = e.key === 'Backspace' || e.key === 'Delete';
+      });
+
+      const formatFn = () => {
+        const curVal = inputEl.value;
+        if (isBackspacing || curVal.length < prevVal.length) {
+          prevVal = curVal;
+          return;
+        }
+
+        let raw = curVal.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+        if (raw.length > 10) raw = raw.slice(0, 10);
+
+        let formatted = '';
+        if (raw.length <= 2) {
+          formatted = raw;
+        } else if (raw.length <= 4) {
+          formatted = raw.slice(0, 2) + ' ' + raw.slice(2);
+        } else if (raw.length <= 6) {
+          formatted = raw.slice(0, 2) + ' ' + raw.slice(2, 4) + ' ' + raw.slice(4);
+        } else {
+          let state = raw.slice(0, 2);
+          let rto = raw.slice(2, 4);
+          let tail = raw.slice(4);
+          let lettersMatch = tail.match(/^[A-Z]+/);
+          if (lettersMatch) {
+            let series = lettersMatch[0].slice(0, 2);
+            let digits = tail.slice(series.length).slice(0, 4);
+            formatted = `${state} ${rto} ${series}${digits ? ' ' + digits : ''}`;
+          } else {
+            formatted = `${state} ${rto} ${tail.slice(0, 2)} ${tail.slice(2, 6)}`;
+          }
+        }
+        inputEl.value = formatted.trim();
+        prevVal = inputEl.value;
+      };
+
+      inputEl.addEventListener('input', formatFn);
+      inputEl.addEventListener('paste', () => setTimeout(formatFn, 0));
+      return (val) => {
+        if (val !== undefined) {
+          inputEl.value = val;
+          prevVal = '';
+          isBackspacing = false;
+        }
+        formatFn();
+      };
+    };
+
+    const formatAddPlate = attachPlateAutoFormatter(document.getElementById('add-staff-vehicle-no'));
+    const formatEditPlate = attachPlateAutoFormatter(document.getElementById('edit-staff-vehicle-no'));
+
     // Add Staff Modal Controls
     const modal = document.getElementById('add-staff-modal');
     const openBtn = document.getElementById('open-add-staff-modal-btn');
@@ -683,6 +742,9 @@ class DirectoriesPage {
       if (modal) {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
+        const form = document.getElementById('add-staff-form');
+        if (form) form.reset();
+        if (formatAddPlate) formatAddPlate('');
         const nameInput = document.getElementById('add-staff-name');
         if (nameInput) setTimeout(() => nameInput.focus(), 50);
       }
@@ -943,7 +1005,11 @@ class DirectoriesPage {
       document.getElementById('edit-staff-id').value = staffMember.id;
       document.getElementById('edit-staff-name').value = staffMember.name;
       document.getElementById('edit-staff-phone').value = staffMember.phone || '';
-      document.getElementById('edit-staff-vehicle-no').value = staffMember.van || '';
+      if (formatEditPlate) {
+        formatEditPlate(staffMember.van || '');
+      } else {
+        document.getElementById('edit-staff-vehicle-no').value = staffMember.van || '';
+      }
       document.getElementById('edit-staff-vehicle-type').value = (staffMember.vehicleType === '2_wheeler' || staffMember.vehicleType === '4_wheeler') ? staffMember.vehicleType : '';
       document.getElementById('edit-staff-label-badge').textContent = staffMember.label;
 
