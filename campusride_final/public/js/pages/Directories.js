@@ -293,9 +293,6 @@ class DirectoriesPage {
                   <span>🖨️</span> <span>Print QRs</span>
                 </button>
               ` : ''}
-              <button type="button" id="open-scan-staff-qr-btn" class="cr-btn cr-btn-secondary text-xs py-2 px-3 shadow-sm flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
-                <span>📷</span> <span>Scan QR</span>
-              </button>
               <button type="button" id="open-add-staff-modal-btn" class="cr-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 px-3.5 shadow-md flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
                 <span>➕</span> <span>Add Staff</span>
               </button>
@@ -321,7 +318,7 @@ class DirectoriesPage {
           <div id="dir-staff-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             ${staff.length === 0 ? `
               <div class="col-span-full cr-card p-12 text-center text-slate-400 text-xs">
-                No personally added staff yet. Click <b>"➕ Add Staff"</b> or <b>"📷 Scan QR"</b> above.
+                No personally added staff yet. Click <b>"➕ Add Staff"</b> above.
               </div>
             ` : staff.map(s => {
               const hasPlate = s.van_no && s.van_no !== 'Staff Pass' && s.van_no !== 'STAFF PASS';
@@ -763,14 +760,6 @@ class DirectoriesPage {
     if (closeBtn) closeBtn.onclick = closeModal;
     if (cancelBtn) cancelBtn.onclick = closeModal;
 
-    // Scan QR button for adding staff
-    const scanBtn = document.getElementById('open-scan-staff-qr-btn');
-    if (scanBtn) {
-      scanBtn.onclick = () => {
-        window.location.hash = '#/registration-scanner?kind=staff';
-      };
-    }
-
     // Submit Add Staff Form
     const addForm = document.getElementById('add-staff-form');
     if (addForm) {
@@ -964,12 +953,13 @@ class DirectoriesPage {
           return;
         }
         if (typeof window.printBulkPasses === 'function') {
-          window.printBulkPasses(driversList.map(d => ({
+          window.printBulkPasses('All Drivers', driversList.map(d => ({
             id: d.id,
             label: d.label,
             name: d.driver_name,
-            number: d.van_no
-          })), 'All Drivers');
+            number: d.van_no ? `${d.label} • ${d.van_no}` : d.label,
+            van_no: d.van_no
+          })));
         }
       };
     }
@@ -984,12 +974,16 @@ class DirectoriesPage {
           return;
         }
         if (typeof window.printBulkPasses === 'function') {
-          window.printBulkPasses(staffList.map(s => ({
-            id: s.id,
-            label: s.label,
-            name: s.driver_name,
-            number: s.phone || s.label
-          })), 'All Staff');
+          window.printBulkPasses('All Staff', staffList.map(s => {
+            const hasPlate = s.van_no && s.van_no !== 'Staff Pass' && s.van_no !== 'STAFF PASS';
+            return {
+              id: s.id,
+              label: s.label,
+              name: s.driver_name,
+              number: hasPlate ? `${s.label} • ${s.van_no}` : s.label,
+              van_no: hasPlate ? s.van_no : ''
+            };
+          }));
         }
       };
     }

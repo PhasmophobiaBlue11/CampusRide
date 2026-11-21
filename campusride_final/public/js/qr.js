@@ -154,7 +154,17 @@ window.printSinglePass = function({ label, name, number, id }) {
 };
 
 // Bulk Pass Print Helper (Prints all driver/staff QRs, maximum 6 QRs per A4 sheet)
-window.printBulkPasses = function(title, passList) {
+window.printBulkPasses = function(arg1, arg2) {
+  let title = 'Campus Passes';
+  let passList = [];
+  if (Array.isArray(arg1)) {
+    passList = arg1;
+    title = typeof arg2 === 'string' ? arg2 : 'Campus Passes';
+  } else if (Array.isArray(arg2)) {
+    title = typeof arg1 === 'string' ? arg1 : 'Campus Passes';
+    passList = arg2;
+  }
+
   if (!Array.isArray(passList) || passList.length === 0) {
     if (window.showToast) window.showToast('No passes to print.', 'error');
     return;
@@ -169,7 +179,11 @@ window.printBulkPasses = function(title, passList) {
 
   const printWin = window.open('', '_blank', 'width=850,height=900');
   if (!printWin) {
-    alert('Please allow popups to open the print layout.');
+    if (window.showToast) {
+      window.showToast('Please allow popups to open the print layout.', 'error');
+    } else {
+      alert('Please allow popups to open the print layout.');
+    }
     return;
   }
 
@@ -180,8 +194,9 @@ window.printBulkPasses = function(title, passList) {
       const driverId = item.id || item.label;
       const payload = `CAMPUSRIDE:DRIVER:${driverId}`;
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=2&data=${encodeURIComponent(payload)}`;
-      const name = item.driver_name || 'Staff Member';
-      const number = item.label + (item.van_no && item.van_no !== 'Staff Pass' ? ' • ' + item.van_no : '');
+      const name = item.name || item.driver_name || 'Staff Member';
+      const cleanPlate = (item.van_no && item.van_no !== 'Staff Pass' && item.van_no !== 'STAFF PASS') ? item.van_no : (item.plate && item.plate !== 'Staff Pass' && item.plate !== 'STAFF PASS' ? item.plate : '');
+      const number = item.number || (item.label ? (cleanPlate ? `${item.label} • ${cleanPlate}` : item.label) : (cleanPlate || 'Pass'));
 
       cardsHtml += `
         <div class="qr-card">
