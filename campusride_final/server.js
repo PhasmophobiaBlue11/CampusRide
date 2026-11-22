@@ -20,6 +20,59 @@ const PERMANENT_ADMIN_USERNAME = 'Admin2026';
 const PERMANENT_ADMIN_PASSWORD = 'Parth@123';
 const BACKUP_JSON_PATH = path.join(__dirname, 'campusride_backup.json');
 
+// Google Firebase Realtime Database Cloud Sync (§Indestructible Cloud Architecture)
+const FIREBASE_DB_URL = 'https://campusride-425bc-default-rtdb.firebaseio.com';
+
+function pushToFirebase(subpath, data) {
+  try {
+    const payload = JSON.stringify(data);
+    const parsed = new URL(`${FIREBASE_DB_URL}/${subpath}.json`);
+    const req = https.request({
+      hostname: parsed.hostname,
+      path: parsed.pathname,
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload)
+      }
+    });
+    req.on('error', () => {});
+    req.write(payload);
+    req.end();
+  } catch (err) {}
+}
+
+function syncBackupToFirebase(backup) {
+  try {
+    if (!backup) return;
+    if (Array.isArray(backup.drivers)) {
+      const dMap = {};
+      backup.drivers.forEach(d => { if (d && d.id) dMap[d.id] = d; });
+      pushToFirebase('drivers', dMap);
+    }
+    if (Array.isArray(backup.users)) {
+      const uMap = {};
+      backup.users.forEach(u => { if (u && u.id) uMap[u.id] = u; });
+      pushToFirebase('users', uMap);
+    }
+    if (Array.isArray(backup.parents)) {
+      const pMap = {};
+      backup.parents.forEach(p => { if (p && p.id) pMap[p.id] = p; });
+      pushToFirebase('parents', pMap);
+    }
+    if (Array.isArray(backup.children)) {
+      const cMap = {};
+      backup.children.forEach(c => { if (c && c.id) cMap[c.id] = c; });
+      pushToFirebase('children', cMap);
+    }
+    if (Array.isArray(backup.staff_requests)) {
+      const srMap = {};
+      backup.staff_requests.forEach(sr => { if (sr && sr.id) srMap[sr.id] = sr; });
+      pushToFirebase('staff_requests', srMap);
+    }
+  } catch (e) {}
+}
+
 // Save entire database snapshot to campusride_backup.json to survive Render redeployments
 function saveBackupJson() {
   try {
@@ -34,6 +87,7 @@ function saveBackupJson() {
       van_logs: db.prepare('SELECT * FROM van_logs ORDER BY timestamp DESC LIMIT 100').all()
     };
     fs.writeFileSync(BACKUP_JSON_PATH, JSON.stringify(backup, null, 2), 'utf-8');
+    syncBackupToFirebase(backup);
   } catch (err) {
     console.warn('[CampusRide] Notice saving backup JSON:', err.message);
   }
@@ -355,7 +409,8 @@ initDatabase();
 const sseClients = new Set();
 
 function broadcastEvent(type, payload) {
-  const message = `event: message\ndata: ${JSON.stringify({ type, payload, timestamp: new Date().toISOString() })}\n\n`;
+  const timestamp = new Date().toISOString();
+  const message = `event: message\ndata: ${JSON.stringify({ type, payload, timestamp })}\n\n`;
   for (const client of sseClients) {
     try {
       client.write(message);
@@ -363,6 +418,8 @@ function broadcastEvent(type, payload) {
       sseClients.delete(client);
     }
   }
+  // Push live event to Google Firebase Realtime Database
+  pushToFirebase('events/latest', { type, payload, timestamp });
 }
 
 // Hybrid token storage: RAM Map cache + Persistent SQLite table
@@ -1913,6 +1970,7 @@ const server = http.createServer(async (req, res) => {
         const now = new Date().toISOString();
         if (vanId) {
           db.prepare('UPDATE van_locations SET live = 0, updated_at = ? WHERE van_id = ?').run(now, vanId);
+          pushToFirebase(`van_locations/${vanId}/live`, 0);
           const van = db.prepare('SELECT id, label, driver_name FROM drivers WHERE id = ?').get(vanId);
           if (van) {
             db.prepare(`
@@ -2012,6 +2070,7 @@ const server = http.createServer(async (req, res) => {
 
         const payload = { van_id: vanId, lat, lng, live: 1, updated_at: now };
         broadcastEvent('location_update', payload);
+        pushToFirebase(`van_locations/${vanId}`, payload);
         return sendJson(res, 200, { success: true });
       }
 

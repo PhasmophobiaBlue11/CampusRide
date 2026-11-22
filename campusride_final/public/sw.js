@@ -20,6 +20,7 @@ const PRECACHE_ASSETS = [
   '/js/sounds.js?v=6.1',
   '/js/i18n.js?v=6.1',
   '/js/api.js?v=6.1',
+  '/js/firebase-client.js?v=6.1',
   '/js/qr.js?v=6.1',
   '/js/components/Header.js?v=6.1',
   '/js/components/LanguageGate.js?v=6.1',

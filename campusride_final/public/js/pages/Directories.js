@@ -94,6 +94,15 @@ class DirectoriesPage {
       } else {
         // Fallback to local device storage only if server returns empty list (offline/restart)
         staff = localStaff;
+        if (staff.length === 0 && window.FirebaseEngine) {
+          try {
+            const fbStaff = await window.FirebaseEngine.getCloudDrivers();
+            const validFbStaff = fbStaff.filter(d => d && d.type === 'staff');
+            if (validFbStaff.length > 0) {
+              staff = validFbStaff;
+            }
+          } catch (e) {}
+        }
       }
 
       // Deduplicate staff list strictly by ID and normalized Name (guaranteeing zero duplicates)
