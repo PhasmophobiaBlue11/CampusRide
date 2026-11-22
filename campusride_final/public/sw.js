@@ -1,6 +1,6 @@
-// CampusRide — Progressive Web App Service Worker (v7.9)
+// CampusRide — Progressive Web App Service Worker (v8.0)
 // High-Speed App Shell Caching & Instant Cold-Start Masking
-const CACHE_NAME = 'campusride-app-v7.9';
+const CACHE_NAME = 'campusride-app-v8.0';
 
 const PRECACHE_ASSETS = [
   '/',
@@ -17,30 +17,30 @@ const PRECACHE_ASSETS = [
   '/assets/favicon-16x16.png',
   '/css/app.css',
   '/manifest.json',
-  '/js/sounds.js?v=5.9',
-  '/js/i18n.js?v=5.9',
-  '/js/api.js?v=5.9',
-  '/js/qr.js?v=5.9',
-  '/js/components/Header.js?v=5.9',
-  '/js/components/LanguageGate.js?v=5.9',
-  '/js/pages/Login.js?v=5.9',
-  '/js/pages/StaffRegister.js?v=5.9',
-  '/js/pages/DriverRegister.js?v=5.9',
-  '/js/pages/ParentRegister.js?v=5.9',
-  '/js/pages/ForgotPassword.js?v=5.9',
-  '/js/pages/ForgotUsername.js?v=5.9',
-  '/js/pages/AdminDashboard.js?v=5.9',
-  '/js/pages/StaffHome.js?v=5.9',
-  '/js/pages/EntryExitScanner.js?v=5.9',
-  '/js/pages/RegistrationScanner.js?v=5.9',
-  '/js/pages/VanRegister.js?v=5.9',
-  '/js/pages/DriversRegistry.js?v=5.9',
-  '/js/pages/DriverHome.js?v=5.9',
-  '/js/pages/ParentHome.js?v=5.9',
-  '/js/pages/Directories.js?v=5.9',
-  '/js/pages/WorkingStaff.js?v=5.9',
-  '/js/pages/Settings.js?v=5.9',
-  '/js/app.js?v=5.9'
+  '/js/sounds.js?v=6.0',
+  '/js/i18n.js?v=6.0',
+  '/js/api.js?v=6.0',
+  '/js/qr.js?v=6.0',
+  '/js/components/Header.js?v=6.0',
+  '/js/components/LanguageGate.js?v=6.0',
+  '/js/pages/Login.js?v=6.0',
+  '/js/pages/StaffRegister.js?v=6.0',
+  '/js/pages/DriverRegister.js?v=6.0',
+  '/js/pages/ParentRegister.js?v=6.0',
+  '/js/pages/ForgotPassword.js?v=6.0',
+  '/js/pages/ForgotUsername.js?v=6.0',
+  '/js/pages/AdminDashboard.js?v=6.0',
+  '/js/pages/StaffHome.js?v=6.0',
+  '/js/pages/EntryExitScanner.js?v=6.0',
+  '/js/pages/RegistrationScanner.js?v=6.0',
+  '/js/pages/VanRegister.js?v=6.0',
+  '/js/pages/DriversRegistry.js?v=6.0',
+  '/js/pages/DriverHome.js?v=6.0',
+  '/js/pages/ParentHome.js?v=6.0',
+  '/js/pages/Directories.js?v=6.0',
+  '/js/pages/WorkingStaff.js?v=6.0',
+  '/js/pages/Settings.js?v=6.0',
+  '/js/app.js?v=6.0'
 ];
 
 self.addEventListener('install', (e) => {

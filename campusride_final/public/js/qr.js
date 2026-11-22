@@ -193,7 +193,7 @@ window.printBulkPasses = function(arg1, arg2) {
     pageItems.forEach(item => {
       const driverId = item.id || item.label;
       const payload = `CAMPUSRIDE:DRIVER:${driverId}`;
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=2&data=${encodeURIComponent(payload)}`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=2&data=${encodeURIComponent(payload)}`;
       const name = item.name || item.driver_name || 'Staff Member';
       const cleanPlate = (item.van_no && item.van_no !== 'Staff Pass' && item.van_no !== 'STAFF PASS') ? item.van_no : (item.plate && item.plate !== 'Staff Pass' && item.plate !== 'STAFF PASS' ? item.plate : '');
       const number = item.number || (item.label ? (cleanPlate ? `${item.label} • ${cleanPlate}` : item.label) : (cleanPlate || 'Pass'));
@@ -290,8 +290,8 @@ window.printBulkPasses = function(arg1, arg2) {
           background: #fff;
         }
         .qr-card img {
-          width: 140px;
-          height: 140px;
+          width: 200px;
+          height: 200px;
           display: block;
           margin: 0 auto 6px auto;
         }
