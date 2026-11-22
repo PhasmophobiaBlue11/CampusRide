@@ -65,6 +65,12 @@ function restoreBackupJson() {
       `);
       for (const d of data.drivers) {
         insertDriver.run(d.id, d.label, d.type || 'van', d.driver_name || '', d.license_number || '', d.van_no || '', d.phone || '', d.vehicle_type || '4_wheeler', d.raw_data || '', d.created_at || new Date().toISOString());
+        if (d.van_no && d.van_no !== 'STAFF PASS' && d.van_no !== 'Staff Pass') {
+          db.prepare("UPDATE drivers SET van_no = ? WHERE id = ? AND (van_no = 'STAFF PASS' OR van_no = 'Staff Pass' OR van_no = '')").run(d.van_no, d.id);
+        }
+        if (d.vehicle_type && d.vehicle_type !== 'walk_in') {
+          db.prepare("UPDATE drivers SET vehicle_type = ? WHERE id = ? AND (vehicle_type = 'walk_in' OR vehicle_type IS NULL)").run(d.vehicle_type, d.id);
+        }
       }
     }
 
@@ -1249,43 +1255,114 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { success: true, driver: updated });
       }
 
-      // DRIVERS & STAFF REGISTRY: Bulk-sync / restore from device storage (§Indestructible Staff)
+      // DRIVERS & STAFF REGISTRY: Smart two-way sync / bulk vehicle updates (§Indestructible Staff & Vehicle Vault)
       if (pathname === '/api/drivers/sync' && req.method === 'POST') {
         if (!user) return sendError(res, 401, 'Unauthorized');
-        const countRow = db.prepare("SELECT count(*) as count FROM drivers WHERE type = 'staff'").get();
-        // If server already has authoritative staff, do not inject stale records
-        if (countRow && countRow.count > 0) {
-          const currentStaff = db.prepare("SELECT * FROM drivers WHERE type = 'staff' ORDER BY CAST(SUBSTR(label, INSTR(label, ' ') + 1) AS INTEGER) ASC, label ASC").all();
-          return sendJson(res, 200, { success: true, staff: currentStaff, message: 'Server already has authoritative staff list' });
-        }
-        const { staffList } = await readJsonBody(req);
-        if (Array.isArray(staffList)) {
+        const body = await readJsonBody(req);
+        const staffList = Array.isArray(body.staffList) ? body.staffList : (Array.isArray(body) ? body : []);
+        const vaultUpdates = body.vaultUpdates && typeof body.vaultUpdates === 'object' ? body.vaultUpdates : null;
+
+        let hasUpdates = false;
+
+        // Process staffList
+        if (staffList.length > 0) {
           const insertStmt = db.prepare(`
-            INSERT OR IGNORE INTO drivers (id, label, type, driver_name, license_number, van_no, phone, vehicle_type, raw_data, created_at)
+            INSERT INTO drivers (id, label, type, driver_name, license_number, van_no, phone, vehicle_type, raw_data, created_at)
             VALUES (?, ?, 'staff', ?, '', ?, ?, ?, ?, ?)
           `);
+
           for (const s of staffList) {
-            if (!s || !s.driver_name) continue;
-            const staffId = s.id || generateId('drv');
-            const existing = db.prepare('SELECT id FROM drivers WHERE id = ?').get(staffId);
-            if (!existing) {
-              const label = s.label || getNextLabel('staff');
+            if (!s) continue;
+            const sName = (s.driver_name || s.name || '').trim();
+            const sId = (s.id || '').trim();
+            const sLabel = (s.label || '').trim();
+            const sVan = (s.van_no || s.van || '').trim();
+            const sType = (s.vehicle_type || s.vehicleType || '').trim();
+            const sPhone = (s.phone || '').trim();
+
+            let existing = null;
+            if (sId) existing = db.prepare('SELECT * FROM drivers WHERE id = ?').get(sId);
+            if (!existing && sLabel) existing = db.prepare("SELECT * FROM drivers WHERE type = 'staff' AND lower(trim(label)) = lower(trim(?))").get(sLabel);
+            if (!existing && sName) existing = db.prepare("SELECT * FROM drivers WHERE type = 'staff' AND lower(trim(driver_name)) = lower(trim(?))").get(sName);
+
+            if (existing) {
+              let updatedVan = existing.van_no;
+              let updatedType = existing.vehicle_type;
+              let updatedPhone = existing.phone;
+              let rowChanged = false;
+
+              if (sVan && sVan !== 'STAFF PASS' && sVan !== 'Staff Pass' && sVan !== existing.van_no) {
+                updatedVan = sVan;
+                rowChanged = true;
+              }
+              if (sType && sType !== existing.vehicle_type) {
+                updatedType = sType;
+                rowChanged = true;
+              }
+              if (sPhone && sPhone !== existing.phone) {
+                updatedPhone = sPhone;
+                rowChanged = true;
+              }
+
+              if (rowChanged) {
+                db.prepare(`
+                  UPDATE drivers 
+                  SET van_no = ?, vehicle_type = ?, phone = ?, raw_data = ?
+                  WHERE id = ?
+                `).run(updatedVan, updatedType, updatedPhone, `Name: ${existing.driver_name}`, existing.id);
+                hasUpdates = true;
+              }
+            } else if (sName) {
+              const newId = sId || generateId('drv');
+              const newLabel = sLabel || getNextLabel('staff');
               insertStmt.run(
-                staffId,
-                label,
-                s.driver_name.trim(),
-                s.van_no || 'Staff Pass',
-                s.phone || '',
-                s.vehicle_type || 'walk_in',
-                s.raw_data || `Name: ${s.driver_name}`,
+                newId,
+                newLabel,
+                sName,
+                sVan || 'Staff Pass',
+                sPhone || '',
+                sType || 'walk_in',
+                s.raw_data || `Name: ${sName}`,
                 s.created_at || new Date().toISOString()
               );
+              hasUpdates = true;
             }
           }
-          saveBackupJson();
         }
-        const currentStaff = db.prepare("SELECT * FROM drivers WHERE type = 'staff' ORDER BY created_at ASC").all();
-        return sendJson(res, 200, { success: true, staff: currentStaff });
+
+        // Process vaultUpdates if sent directly as key-value map
+        if (vaultUpdates) {
+          for (const [key, v] of Object.entries(vaultUpdates)) {
+            if (!v || typeof v !== 'object') continue;
+            const sVan = (v.van_no || v.van || '').trim();
+            const sType = (v.vehicle_type || v.vehicleType || '').trim();
+            const sPhone = (v.phone || '').trim();
+            if (!sVan && !sType && !sPhone) continue;
+
+            const existing = db.prepare("SELECT * FROM drivers WHERE type = 'staff' AND (id = ? OR lower(trim(label)) = lower(trim(?)) OR lower(trim(driver_name)) = lower(trim(?)))").get(key, key, key);
+            if (existing) {
+              let updatedVan = (sVan && sVan !== 'STAFF PASS' && sVan !== 'Staff Pass') ? sVan : existing.van_no;
+              let updatedType = sType || existing.vehicle_type;
+              let updatedPhone = sPhone || existing.phone;
+              if (updatedVan !== existing.van_no || updatedType !== existing.vehicle_type || updatedPhone !== existing.phone) {
+                db.prepare(`
+                  UPDATE drivers 
+                  SET van_no = ?, vehicle_type = ?, phone = ?, raw_data = ?
+                  WHERE id = ?
+                `).run(updatedVan, updatedType, updatedPhone, `Name: ${existing.driver_name}`, existing.id);
+                hasUpdates = true;
+              }
+            }
+          }
+        }
+
+        if (hasUpdates) {
+          saveBackupJson();
+          broadcastEvent('drivers_synced', { timestamp: new Date().toISOString() });
+        }
+
+        const currentStaff = db.prepare("SELECT * FROM drivers WHERE type = 'staff' ORDER BY CAST(SUBSTR(label, INSTR(label, ' ') + 1) AS INTEGER) ASC, label ASC").all();
+        return sendJson(res, 200, { success: true, staff: currentStaff, updated: hasUpdates });
       }
 
       // EMERGENCY CONTACTS: Role-tailored emergency contacts for SOS (§SOS)

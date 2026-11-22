@@ -112,9 +112,9 @@
       "type": "staff",
       "driver_name": "Rinkoo Saini",
       "license_number": "",
-      "van_no": "STAFF PASS",
+      "van_no": "Staff Pass",
       "phone": "",
-      "vehicle_type": "walk_in",
+      "vehicle_type": "4_wheeler",
       "raw_data": "Name: Rinkoo Saini",
       "created_at": "2026-11-08T05:38:01.156Z"
     },
@@ -1485,6 +1485,12 @@
       "user_id": "usr_perm_admin",
       "created_at": 1795254296627,
       "last_active": 1795254296627
+    },
+    {
+      "token": "cr_2006bd33aa0c942ac9dafe65a5c053911f2de512c31100ec",
+      "user_id": "usr_perm_admin",
+      "created_at": 1795331049411,
+      "last_active": 1795331049411
     }
   ],
   "van_logs": []

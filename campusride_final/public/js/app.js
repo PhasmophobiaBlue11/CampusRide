@@ -523,31 +523,84 @@
   }
 }
 
-  // Background helper to ensure persistent staff passes stored on user's device survive server redeployments (§Indestructible Staff)
+  // Background helper to ensure persistent staff passes and vehicle vault survive server redeployments (§Indestructible Staff & Vehicle Vault)
   window.syncPersistentStaffRegistry = async function() {
     try {
       const res = await window.api.request('/api/drivers');
       const serverStaff = (res.drivers || []).filter(d => d.type === 'staff');
+
+      let vault = {};
+      try {
+        vault = JSON.parse(localStorage.getItem('campusride_staff_vehicle_vault') || '{}');
+      } catch (e) {}
+
+      let localStaff = [];
+      try {
+        localStaff = JSON.parse(localStorage.getItem('campusride_persistent_staff_registry') || '[]');
+      } catch (e) {}
+
       if (serverStaff.length > 0) {
-        // Server already has authoritative staff (103 staff)! Cleanse client storage to match
-        localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(serverStaff));
+        let needsServerSync = false;
+        const mergedStaff = serverStaff.map(s => {
+          const sId = String(s.id || '').trim();
+          const sName = String(s.driver_name || '').trim().toLowerCase();
+          const sLabel = String(s.label || '').trim().toLowerCase();
+
+          // Check vault first, then check localStaff
+          const vaultItem = vault[sId] || vault[sName] || vault[sLabel];
+          const localItem = Array.isArray(localStaff) ? localStaff.find(ls => (ls.id && ls.id === sId) || (ls.driver_name && ls.driver_name.toLowerCase() === sName)) : null;
+
+          const savedVan = vaultItem?.van_no || localItem?.van_no;
+          const savedType = vaultItem?.vehicle_type || localItem?.vehicle_type;
+          const savedPhone = vaultItem?.phone || localItem?.phone;
+
+          let changed = false;
+          if (savedVan && savedVan !== 'STAFF PASS' && savedVan !== 'Staff Pass' && (!s.van_no || s.van_no === 'STAFF PASS' || s.van_no === 'Staff Pass')) {
+            s.van_no = savedVan;
+            changed = true;
+          }
+          if (savedType && savedType !== 'walk_in' && (!s.vehicle_type || s.vehicle_type === 'walk_in')) {
+            s.vehicle_type = savedType;
+            changed = true;
+          }
+          if (savedPhone && !s.phone) {
+            s.phone = savedPhone;
+            changed = true;
+          }
+
+          if (changed) {
+            needsServerSync = true;
+            // Ensure vault stays in sync
+            vault[sId] = { van_no: s.van_no, vehicle_type: s.vehicle_type, phone: s.phone, label: s.label, name: s.driver_name, updated_at: Date.now() };
+            if (sName) vault[sName] = vault[sId];
+          }
+          return s;
+        });
+
+        localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(mergedStaff));
+        localStorage.setItem('campusride_staff_vehicle_vault', JSON.stringify(vault));
+
+        if (needsServerSync) {
+          await window.api.request('/api/drivers/sync', {
+            method: 'POST',
+            body: JSON.stringify({ staffList: mergedStaff })
+          });
+        }
         return;
       }
 
-      // Only if server is completely empty (0 staff), restore from device storage
-      const raw = localStorage.getItem('campusride_persistent_staff_registry');
-      if (!raw) return;
-      const localStaff = JSON.parse(raw);
-      if (!Array.isArray(localStaff) || localStaff.length === 0) return;
-      const deletedArr = JSON.parse(localStorage.getItem('campusride_deleted_staff_ids') || '[]');
-      const deletedSet = new Set(deletedArr);
-      const validStaff = localStaff.filter(s => s && s.id && !deletedSet.has(s.id));
-      if (validStaff.length === 0) return;
-
-      await window.api.request('/api/drivers/sync', {
-        method: 'POST',
-        body: JSON.stringify({ staffList: validStaff })
-      });
+      // If server is completely empty (0 staff), restore from device storage
+      if (Array.isArray(localStaff) && localStaff.length > 0) {
+        const deletedArr = JSON.parse(localStorage.getItem('campusride_deleted_staff_ids') || '[]');
+        const deletedSet = new Set(deletedArr);
+        const validStaff = localStaff.filter(s => s && s.id && !deletedSet.has(s.id));
+        if (validStaff.length > 0) {
+          await window.api.request('/api/drivers/sync', {
+            method: 'POST',
+            body: JSON.stringify({ staffList: validStaff })
+          });
+        }
+      }
     } catch (e) {
       // Non-blocking background sync
     }

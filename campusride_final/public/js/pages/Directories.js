@@ -35,16 +35,62 @@ class DirectoriesPage {
         return numA - numB;
       });
 
-      // Authoritative source of truth:
-      // When the server responds with staff, use the server's authoritative staff list (103 staff)
-      // and purge any stale ghost records from local device storage.
+      // Authoritative source of truth with Smart Vault Merge (§Indestructible Staff & Vehicle Vault):
       const serverStaff = allDrivers.filter(d => d.type === 'staff');
+      let vehicleVault = {};
+      try {
+        vehicleVault = JSON.parse(localStorage.getItem('campusride_staff_vehicle_vault') || '{}');
+      } catch (e) {}
+
       if (serverStaff.length > 0) {
-        staff = serverStaff;
+        let needsServerSync = false;
+        staff = serverStaff.map(s => {
+          const sId = String(s.id || '').trim();
+          const sName = String(s.driver_name || '').trim().toLowerCase();
+          const sLabel = String(s.label || '').trim().toLowerCase();
+
+          // Check vault first, then check localStaff
+          const vaultItem = vehicleVault[sId] || vehicleVault[sName] || vehicleVault[sLabel];
+          const localItem = Array.isArray(localStaff) ? localStaff.find(ls => (ls.id && ls.id === sId) || (ls.driver_name && ls.driver_name.toLowerCase() === sName)) : null;
+
+          const savedVan = vaultItem?.van_no || localItem?.van_no;
+          const savedType = vaultItem?.vehicle_type || localItem?.vehicle_type;
+          const savedPhone = vaultItem?.phone || localItem?.phone;
+
+          let changed = false;
+          if (savedVan && savedVan !== 'STAFF PASS' && savedVan !== 'Staff Pass' && (!s.van_no || s.van_no === 'STAFF PASS' || s.van_no === 'Staff Pass')) {
+            s.van_no = savedVan;
+            changed = true;
+          }
+          if (savedType && savedType !== 'walk_in' && (!s.vehicle_type || s.vehicle_type === 'walk_in')) {
+            s.vehicle_type = savedType;
+            changed = true;
+          }
+          if (savedPhone && !s.phone) {
+            s.phone = savedPhone;
+            changed = true;
+          }
+
+          if (changed) {
+            needsServerSync = true;
+            vehicleVault[sId] = { van_no: s.van_no, vehicle_type: s.vehicle_type, phone: s.phone, label: s.label, name: s.driver_name, updated_at: Date.now() };
+            if (sName) vehicleVault[sName] = vehicleVault[sId];
+          }
+          return s;
+        });
+
         try {
-          localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(serverStaff));
+          localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(staff));
+          localStorage.setItem('campusride_staff_vehicle_vault', JSON.stringify(vehicleVault));
           localStorage.removeItem('campusride_deleted_staff_ids');
         } catch (e) {}
+
+        if (needsServerSync) {
+          window.api.request('/api/drivers/sync', {
+            method: 'POST',
+            body: JSON.stringify({ staffList: staff })
+          }).catch(() => {});
+        }
       } else {
         // Fallback to local device storage only if server returns empty list (offline/restart)
         staff = localStaff;
@@ -292,6 +338,9 @@ class DirectoriesPage {
                 <button type="button" id="dir-print-all-staff-btn" class="cr-btn cr-btn-secondary text-xs py-2 px-3 shadow-sm flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
                   <span>🖨️</span> <span>Print QRs</span>
                 </button>
+                <button type="button" id="open-bulk-vehicle-modal-btn" class="cr-btn bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs py-2 px-3 shadow-sm flex items-center gap-1.5 cursor-pointer whitespace-nowrap" title="Bulk edit vehicle numbers and vehicle types for all staff">
+                  <span>📋</span> <span>Quick Vehicle Manager</span>
+                </button>
               ` : ''}
               <button type="button" id="open-add-staff-modal-btn" class="cr-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 px-3.5 shadow-md flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
                 <span>➕</span> <span>Add Staff</span>
@@ -500,6 +549,103 @@ class DirectoriesPage {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+
+        <!-- MODAL: QUICK BULK STAFF VEHICLE MANAGER -->
+        <div id="bulk-staff-vehicle-modal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-5">
+          <div class="cr-card max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
+            <!-- Modal Header -->
+            <div class="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-900/80">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl font-bold">
+                  📋
+                </div>
+                <div>
+                  <h3 class="font-black text-base sm:text-lg text-slate-900 dark:text-white flex items-center gap-2">
+                    Quick Staff Vehicle Manager
+                    <span id="bulk-vehicle-count-badge" class="text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                      ${staff.length} Staff
+                    </span>
+                  </h3>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">
+                    Quickly assign or restore vehicle numbers & vehicle types across all staff in one place.
+                  </p>
+                </div>
+              </div>
+              <button type="button" id="close-bulk-vehicle-modal-btn" class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 text-lg font-bold cursor-pointer select-none transition">
+                ✕
+              </button>
+            </div>
+
+            <!-- Modal Search & Filter Toolbar -->
+            <div class="p-3 sm:px-5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-3 flex-wrap">
+              <div class="relative flex-1 min-w-[200px]">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
+                <input type="text" id="bulk-vehicle-search" placeholder="Filter staff by name or label (e.g. Staff 5)..."
+                       class="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500" autocomplete="off" />
+              </div>
+              <div class="flex items-center gap-2 text-xs">
+                <span class="text-slate-500 dark:text-slate-400">Filter:</span>
+                <select id="bulk-vehicle-filter-type" class="px-2 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                  <option value="all">All (${staff.length})</option>
+                  <option value="with_vehicle">With Vehicle</option>
+                  <option value="walk_in">Walk-in only</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Modal Scrollable Table Body -->
+            <div class="flex-1 overflow-y-auto p-3 sm:p-5 divide-y divide-slate-100 dark:divide-slate-800" id="bulk-vehicle-rows-container">
+              ${staff.map((s) => {
+                const hasPlate = s.van_no && s.van_no !== 'Staff Pass' && s.van_no !== 'STAFF PASS';
+                const curPlate = hasPlate ? s.van_no : '';
+                const curType = s.vehicle_type || 'walk_in';
+                return `
+                <div class="bulk-vehicle-row py-3 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                     data-id="${s.id}" data-name="${(s.driver_name || '').toLowerCase()}" data-label="${(s.label || '').toLowerCase()}">
+                  <div class="flex items-center gap-3 sm:w-1/3 min-w-0">
+                    <span class="text-xs font-black px-2 py-1 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shrink-0">
+                      ${s.label}
+                    </span>
+                    <div class="min-w-0 truncate">
+                      <div class="font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate">${s.driver_name}</div>
+                      <div class="text-[11px] text-slate-400">Campus Staff Pass</div>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-2 flex-1 sm:w-2/3">
+                    <div class="flex-1">
+                      <input type="text" class="bulk-plate-input cr-input py-1.5 px-2.5 text-xs font-mono font-bold uppercase tracking-wider text-center"
+                             data-id="${s.id}" value="${curPlate}" placeholder="e.g. MH 12 AB 1234" autocomplete="off" autocapitalize="characters" />
+                    </div>
+                    <div class="w-36 sm:w-44 shrink-0">
+                      <select class="bulk-type-select cr-input py-1.5 px-2 text-xs font-semibold" data-id="${s.id}">
+                        <option value="walk_in" ${curType === 'walk_in' ? 'selected' : ''}>🚶 Walk-in</option>
+                        <option value="4_wheeler" ${curType === '4_wheeler' ? 'selected' : ''}>🚗 4 Wheeler</option>
+                        <option value="2_wheeler" ${curType === '2_wheeler' ? 'selected' : ''}>🛵 2 Wheeler</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                `;
+              }).join('')}
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 sm:p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between gap-3 flex-wrap">
+              <div class="text-xs text-slate-500 dark:text-slate-400">
+                🔒 Protected by Device Vault & Multi-Server Sync
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" id="cancel-bulk-vehicle-btn" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 cursor-pointer select-none transition">
+                  Cancel
+                </button>
+                <button type="button" id="save-bulk-vehicle-btn" class="px-5 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20 cursor-pointer select-none transition flex items-center gap-2">
+                  <span>💾</span> <span id="save-bulk-btn-text">Save All Changes</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -817,6 +963,11 @@ class DirectoriesPage {
             const currentReg = JSON.parse(localStorage.getItem('campusride_persistent_staff_registry') || '[]');
             currentReg.push(newMember);
             localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(currentReg));
+
+            const vault = JSON.parse(localStorage.getItem('campusride_staff_vehicle_vault') || '{}');
+            vault[res.id] = { van_no: vehicleNo, vehicle_type: vehicleType, phone: phone, label: res.label, name: name, updated_at: Date.now() };
+            if (name) vault[name.toLowerCase()] = vault[res.id];
+            localStorage.setItem('campusride_staff_vehicle_vault', JSON.stringify(vault));
           } catch (e) {}
 
           window.showToast(`Staff member "${name}" registered as ${res.label}!`, 'success');
@@ -1077,7 +1228,7 @@ class DirectoriesPage {
             })
           });
 
-          // Update local persistent device storage
+          // Update local persistent device storage and vault
           try {
             const currentReg = JSON.parse(localStorage.getItem('campusride_persistent_staff_registry') || '[]');
             const idx = currentReg.findIndex(s => s.id === id);
@@ -1088,6 +1239,10 @@ class DirectoriesPage {
               currentReg[idx].vehicle_type = vehicleType;
               localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(currentReg));
             }
+            const vault = JSON.parse(localStorage.getItem('campusride_staff_vehicle_vault') || '{}');
+            vault[id] = { van_no: vehicleNo, vehicle_type: vehicleType, phone: phone, name: name, updated_at: Date.now() };
+            if (name) vault[name.toLowerCase()] = vault[id];
+            localStorage.setItem('campusride_staff_vehicle_vault', JSON.stringify(vault));
           } catch (e) {}
 
           window.showToast(`Staff info for "${name}" updated successfully!`, 'success');
@@ -1107,6 +1262,143 @@ class DirectoriesPage {
           window.showToast(err.message || 'Failed to update staff info', 'error');
           submitBtn.disabled = false;
           submitBtn.textContent = '💾 Save Changes';
+        }
+      };
+    }
+
+    // Bulk Staff Vehicle Manager Controls
+    const bulkVehicleModal = document.getElementById('bulk-staff-vehicle-modal');
+    const openBulkBtn = document.getElementById('open-bulk-vehicle-modal-btn');
+    const closeBulkBtn = document.getElementById('close-bulk-vehicle-modal-btn');
+    const cancelBulkBtn = document.getElementById('cancel-bulk-vehicle-btn');
+    const saveBulkBtn = document.getElementById('save-bulk-vehicle-btn');
+    const searchBulkInput = document.getElementById('bulk-vehicle-search');
+    const filterBulkType = document.getElementById('bulk-vehicle-filter-type');
+
+    if (openBulkBtn && bulkVehicleModal) {
+      openBulkBtn.onclick = () => {
+        bulkVehicleModal.classList.remove('hidden');
+        bulkVehicleModal.classList.add('flex');
+        // Attach auto-formatters to all plate inputs in bulk modal
+        const plateInputs = bulkVehicleModal.querySelectorAll('.bulk-plate-input');
+        plateInputs.forEach(input => {
+          if (!input._formatterAttached) {
+            input._formatterAttached = true;
+            attachPlateAutoFormatter(input);
+          }
+        });
+        if (searchBulkInput) {
+          searchBulkInput.value = '';
+          setTimeout(() => searchBulkInput.focus(), 50);
+        }
+      };
+    }
+
+    const closeBulkModal = () => {
+      if (!bulkVehicleModal) return;
+      bulkVehicleModal.classList.add('hidden');
+      bulkVehicleModal.classList.remove('flex');
+    };
+
+    if (closeBulkBtn) closeBulkBtn.onclick = closeBulkModal;
+    if (cancelBulkBtn) cancelBulkBtn.onclick = closeBulkModal;
+
+    // Filter rows in bulk vehicle modal
+    const filterBulkRows = () => {
+      if (!bulkVehicleModal) return;
+      const q = (searchBulkInput?.value || '').trim().toLowerCase();
+      const typeFilter = filterBulkType?.value || 'all';
+      const rows = bulkVehicleModal.querySelectorAll('.bulk-vehicle-row');
+
+      rows.forEach(r => {
+        const name = r.getAttribute('data-name') || '';
+        const label = r.getAttribute('data-label') || '';
+        const plateInput = r.querySelector('.bulk-plate-input');
+        const plate = (plateInput?.value || '').toLowerCase();
+        const typeSelect = r.querySelector('.bulk-type-select');
+        const selType = typeSelect?.value || 'walk_in';
+
+        const matchesQuery = !q || name.includes(q) || label.includes(q) || plate.includes(q);
+        let matchesType = true;
+        if (typeFilter === 'with_vehicle') {
+          matchesType = (plate && plate !== 'staff pass') || (selType !== 'walk_in');
+        } else if (typeFilter === 'walk_in') {
+          matchesType = (!plate || plate === 'staff pass') && (selType === 'walk_in');
+        }
+
+        r.style.display = (matchesQuery && matchesType) ? '' : 'none';
+      });
+    };
+
+    if (searchBulkInput) searchBulkInput.addEventListener('input', filterBulkRows);
+    if (filterBulkType) filterBulkType.addEventListener('change', filterBulkRows);
+
+    // Save All in Bulk Vehicle Modal
+    if (saveBulkBtn && bulkVehicleModal) {
+      saveBulkBtn.onclick = async () => {
+        saveBulkBtn.disabled = true;
+        const btnText = document.getElementById('save-bulk-btn-text');
+        if (btnText) btnText.textContent = 'Saving All...';
+
+        try {
+          const rows = bulkVehicleModal.querySelectorAll('.bulk-vehicle-row');
+          const currentStaff = DirectoriesPage.currentStaff || [];
+          const staffMap = new Map();
+          currentStaff.forEach(s => staffMap.set(s.id, { ...s }));
+
+          let vault = {};
+          try {
+            vault = JSON.parse(localStorage.getItem('campusride_staff_vehicle_vault') || '{}');
+          } catch (e) {}
+
+          const updatedList = [];
+          rows.forEach(r => {
+            const id = r.getAttribute('data-id');
+            const plateInput = r.querySelector('.bulk-plate-input');
+            const typeSelect = r.querySelector('.bulk-type-select');
+            const plateVal = (plateInput?.value || '').trim().toUpperCase();
+            const typeVal = typeSelect?.value || 'walk_in';
+
+            const staffObj = staffMap.get(id);
+            if (staffObj) {
+              staffObj.van_no = plateVal || 'Staff Pass';
+              staffObj.vehicle_type = typeVal;
+
+              // Save to vault
+              vault[id] = { van_no: staffObj.van_no, vehicle_type: staffObj.vehicle_type, phone: staffObj.phone || '', label: staffObj.label, name: staffObj.driver_name, updated_at: Date.now() };
+              if (staffObj.driver_name) vault[staffObj.driver_name.toLowerCase()] = vault[id];
+
+              updatedList.push(staffObj);
+            }
+          });
+
+          // Save to persistent storage and vault
+          localStorage.setItem('campusride_persistent_staff_registry', JSON.stringify(updatedList));
+          localStorage.setItem('campusride_staff_vehicle_vault', JSON.stringify(vault));
+
+          // Send to server
+          await window.api.request('/api/drivers/sync', {
+            method: 'POST',
+            body: JSON.stringify({ staffList: updatedList })
+          });
+
+          window.showToast('✅ All staff vehicle details saved permanently!', 'success');
+          closeBulkModal();
+
+          // Refresh Staff Directory view
+          DirectoriesPage.currentTab = 'staff';
+          const appEl = document.getElementById('app');
+          appEl.innerHTML = `
+            ${window.HeaderComponent.render(user)}
+            <main class="pb-24 sm:pb-12">
+              ${await DirectoriesPage.render(user)}
+            </main>
+          `;
+          DirectoriesPage.attachEvents(user);
+        } catch (err) {
+          window.showToast(err.message || 'Failed to save staff vehicle details', 'error');
+          saveBulkBtn.disabled = false;
+          if (btnText) btnText.textContent = 'Save All Changes';
         }
       };
     }
