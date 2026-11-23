@@ -70,6 +70,11 @@ function syncBackupToFirebase(backup) {
       backup.staff_requests.forEach(sr => { if (sr && sr.id) srMap[sr.id] = sr; });
       pushToFirebase('staff_requests', srMap);
     }
+    if (Array.isArray(backup.van_logs)) {
+      const lMap = {};
+      backup.van_logs.forEach(l => { if (l && l.id) lMap[l.id] = l; });
+      pushToFirebase('van_logs', lMap);
+    }
   } catch (e) {}
 }
 
@@ -198,6 +203,33 @@ function restoreBackupJson() {
   } catch (err) {
     console.warn('[CampusRide] Notice restoring backup JSON:', err.message);
   }
+}
+
+function restoreFromFirebase() {
+  try {
+    const parsed = new URL(`${FIREBASE_DB_URL}/van_logs.json`);
+    const req = https.get(parsed, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        try {
+          const logsMap = JSON.parse(body);
+          if (logsMap && typeof logsMap === 'object') {
+            const insertLog = db.prepare(`
+              INSERT OR IGNORE INTO van_logs (id, qr_identifier, driver_id, driver_name, driver_label, event_type, scanned_by, timestamp)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            for (const l of Object.values(logsMap)) {
+              if (l && l.id) {
+                insertLog.run(l.id, l.qr_identifier || '', l.driver_id, l.driver_name || '', l.driver_label || '', l.event_type, l.scanned_by || '', l.timestamp);
+              }
+            }
+          }
+        } catch (e) {}
+      });
+    });
+    req.on('error', () => {});
+  } catch (err) {}
 }
 
 function ensurePermanentAdmin() {
@@ -369,6 +401,7 @@ function initDatabase() {
 
   // Restore snapshot if needed
   restoreBackupJson();
+  restoreFromFirebase();
 
   // Ensure Admin2026 is active
   ensurePermanentAdmin();
@@ -1550,6 +1583,17 @@ const server = http.createServer(async (req, res) => {
           INSERT INTO van_logs (id, qr_identifier, driver_id, driver_name, driver_label, event_type, scanned_by, timestamp)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `).run(logId, qrPayload, driver.id, driver.driver_name, driver.label, scanType, scannedBy, now);
+
+        pushToFirebase(`van_logs/${logId}`, {
+          id: logId,
+          qr_identifier: qrPayload,
+          driver_id: driver.id,
+          driver_name: driver.driver_name,
+          driver_label: driver.label,
+          event_type: scanType,
+          scanned_by: scannedBy,
+          timestamp: now
+        });
 
         // Notify parents tracking this van
         const trackingChildren = db.prepare('SELECT parent_id, name FROM children WHERE van_id = ?').all(driver.id);
