@@ -128,11 +128,21 @@ class AdminDashboardPage {
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label class="block font-semibold mb-1">New Password</label>
-                      <input type="password" id="admin-edit-staff-password" required minlength="4" class="cr-input" placeholder="Enter new password" />
+                      <div class="relative flex items-center">
+                        <input type="password" id="admin-edit-staff-password" required minlength="4" class="cr-input pr-10" placeholder="Enter new password" />
+                        <button type="button" id="toggle-admin-edit-password" class="absolute right-2.5 p-1 text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none" title="Toggle password visibility">
+                          👁️
+                        </button>
+                      </div>
                     </div>
                     <div>
                       <label class="block font-semibold mb-1">4-Digit Security PIN</label>
-                      <input type="text" id="admin-edit-staff-pin" required pattern="[0-9]{4}" maxlength="4" class="cr-input font-mono font-bold tracking-widest text-center" value="${staffData.staff.pin || ''}" />
+                      <div class="relative flex items-center">
+                        <input type="password" id="admin-edit-staff-pin" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" class="cr-input font-mono font-bold tracking-widest text-center pr-10" value="${staffData.staff.pin || ''}" />
+                        <button type="button" id="toggle-admin-edit-pin" class="absolute right-2.5 p-1 text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none" title="Toggle PIN visibility">
+                          👁️
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <button type="submit" id="admin-save-staff-btn" class="cr-btn cr-btn-primary w-full py-2 font-bold cursor-pointer shadow-sm">
@@ -156,11 +166,21 @@ class AdminDashboardPage {
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Account Password</label>
-                    <input type="password" id="admin-new-staff-password" required minlength="4" class="cr-input" placeholder="••••••••" />
+                    <div class="relative flex items-center">
+                      <input type="password" id="admin-new-staff-password" required minlength="4" class="cr-input pr-10" placeholder="••••••••" />
+                      <button type="button" id="toggle-admin-new-password" class="absolute right-2.5 p-1 text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none" title="Toggle password visibility">
+                        👁️
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">4-Digit Security PIN</label>
-                    <input type="text" id="admin-new-staff-pin" required pattern="[0-9]{4}" maxlength="4" class="cr-input font-mono font-bold tracking-widest text-center" placeholder="1234" />
+                    <div class="relative flex items-center">
+                      <input type="password" id="admin-new-staff-pin" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" class="cr-input font-mono font-bold tracking-widest text-center pr-10" placeholder="••••" />
+                      <button type="button" id="toggle-admin-new-pin" class="absolute right-2.5 p-1 text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none" title="Toggle PIN visibility">
+                        👁️
+                      </button>
+                    </div>
                     <p class="text-[10px] text-slate-400 mt-0.5">Used for quick phone unlocking.</p>
                   </div>
                 </div>
@@ -344,6 +364,23 @@ class AdminDashboardPage {
   }
 
   static attachEvents() {
+    // Eye toggles for PIN and Password visibility
+    const setupEyeToggle = (btnId, inputId) => {
+      const btn = document.getElementById(btnId);
+      const input = document.getElementById(inputId);
+      if (btn && input) {
+        btn.onclick = () => {
+          const isPass = input.type === 'password';
+          input.type = isPass ? 'text' : 'password';
+          btn.textContent = isPass ? '🙈' : '👁️';
+        };
+      }
+    };
+    setupEyeToggle('toggle-admin-new-password', 'admin-new-staff-password');
+    setupEyeToggle('toggle-admin-new-pin', 'admin-new-staff-pin');
+    setupEyeToggle('toggle-admin-edit-password', 'admin-edit-staff-password');
+    setupEyeToggle('toggle-admin-edit-pin', 'admin-edit-staff-pin');
+
     // 1. Reveal PIN Toggle
     const pinBtn = document.getElementById('admin-toggle-pin-btn');
     const pinDisplay = document.getElementById('admin-staff-pin-display');

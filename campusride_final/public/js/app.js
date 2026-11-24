@@ -212,16 +212,23 @@
     }
 
     // 4-Digit Security PIN Gate for Returning Devices (§Quick Unlock)
-    if (activeApp && !window.LoginPage.isPasswordMode) {
-      const savedAccountJson = localStorage.getItem(`campusride_saved_account_${activeApp}`);
+    // ONLY triggered if user has an active authenticated session for this role
+    const activeRoleToken = localStorage.getItem(`campusride_${activeApp}_token`) || 
+                            (localStorage.getItem('campusride_app_role') === activeApp ? localStorage.getItem('campusride_token') : null);
+    const savedAccountJson = localStorage.getItem(`campusride_saved_account_${activeApp}`);
+
+    if (activeApp && activeRoleToken && savedAccountJson && !window.LoginPage.isPasswordMode) {
       const isPinUnlocked = sessionStorage.getItem(`campusride_pin_unlocked_${activeApp}`) === 'true';
-      if (savedAccountJson && !isPinUnlocked) {
+      if (!isPinUnlocked) {
         localStorage.setItem('campusride_app_role', activeApp);
         appEl.innerHTML = window.LoginPage.render(activeApp);
         window.LoginPage.attachEvents();
         if (window.i18n) window.i18n.translateDOM();
         return;
       }
+    } else if (activeApp && !activeRoleToken && savedAccountJson) {
+      // Purge orphaned saved account when no token exists so user lands directly on Login page
+      localStorage.removeItem(`campusride_saved_account_${activeApp}`);
     }
 
     // Check Authentication with Warmup Resilience

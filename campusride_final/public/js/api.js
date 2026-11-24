@@ -165,6 +165,11 @@ class ApiClient {
         console.warn('[Auth] Session invalidated by server.');
         this.setToken(null);
         this.user = null;
+        for (const r of ['driver', 'parent', 'staff', 'admin']) {
+          localStorage.removeItem(`campusride_${r}_token`);
+          localStorage.removeItem(`campusride_saved_account_${r}`);
+          sessionStorage.removeItem(`campusride_pin_unlocked_${r}`);
+        }
         return null;
       }
       console.warn('[Auth] Server is warming up or connection pending. Retaining session token.');
@@ -178,12 +183,12 @@ class ApiClient {
     } catch {}
     const key = this.getTokenKey();
     localStorage.removeItem(key);
-    try {
-      sessionStorage.removeItem('campusride_pin_unlocked_driver');
-      sessionStorage.removeItem('campusride_pin_unlocked_parent');
-      sessionStorage.removeItem('campusride_pin_unlocked_staff');
-      sessionStorage.removeItem('campusride_pin_unlocked_admin');
-    } catch {}
+    for (const r of ['driver', 'parent', 'staff', 'admin']) {
+      localStorage.removeItem(`campusride_${r}_token`);
+      localStorage.removeItem(`campusride_saved_account_${r}`);
+      sessionStorage.removeItem(`campusride_pin_unlocked_${r}`);
+    }
+    localStorage.removeItem('campusride_app_role');
     this.setToken(null);
     this.user = null;
     window.location.hash = '#/';

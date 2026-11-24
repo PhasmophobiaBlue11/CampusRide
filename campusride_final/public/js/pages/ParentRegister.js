@@ -87,7 +87,12 @@ class ParentRegisterPage {
 
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">4-Digit Security PIN (Quick Device Unlock)</label>
-              <input type="password" id="parent-pin" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" class="cr-input font-mono font-bold tracking-widest text-center text-base" placeholder="••••" autocomplete="off" />
+              <div class="relative flex items-center">
+                <input type="password" id="parent-pin" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" class="cr-input font-mono font-bold tracking-widest text-center text-base pr-11" placeholder="••••" autocomplete="off" />
+                <button type="button" id="toggle-parent-pin" class="absolute right-2.5 p-1 text-base text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none" title="Toggle PIN visibility">
+                  👁️
+                </button>
+              </div>
               <p class="text-[10px] text-slate-400 mt-0.5">Set a 4-digit PIN (e.g. 1234) to quickly unlock the Parent App on this phone next time.</p>
             </div>
 
@@ -155,6 +160,16 @@ class ParentRegisterPage {
         const isPass = passInput.type === 'password';
         passInput.type = isPass ? 'text' : 'password';
         togglePassBtn.textContent = isPass ? '🙈' : '👁️';
+      };
+    }
+
+    const togglePinBtn = document.getElementById('toggle-parent-pin');
+    const pinInput = document.getElementById('parent-pin');
+    if (togglePinBtn && pinInput) {
+      togglePinBtn.onclick = () => {
+        const isPass = pinInput.type === 'password';
+        pinInput.type = isPass ? 'text' : 'password';
+        togglePinBtn.textContent = isPass ? '🙈' : '👁️';
       };
     }
 

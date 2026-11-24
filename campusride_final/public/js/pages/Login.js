@@ -82,7 +82,12 @@ class LoginPage {
                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                   Enter 4-Digit Security PIN
                 </label>
-                <input type="password" id="double-sec-pin-input" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" autofocus class="cr-input font-mono font-black text-2xl tracking-widest text-center py-3 w-44 mx-auto block shadow-inner" placeholder="••••" autocomplete="one-time-code" />
+                <div class="relative flex items-center justify-center w-52 mx-auto">
+                  <input type="password" id="double-sec-pin-input" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" autofocus class="cr-input font-mono font-black text-2xl tracking-widest text-center py-3 pr-11 w-full shadow-inner" placeholder="••••" autocomplete="one-time-code" />
+                  <button type="button" id="toggle-double-sec-pin" class="absolute right-2.5 p-1 text-base text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none" title="Toggle PIN visibility">
+                    👁️
+                  </button>
+                </div>
               </div>
 
               <button type="submit" id="double-sec-submit-btn" class="cr-btn ${btnClass} w-full py-2.5 font-bold cursor-pointer shadow-md transition">
@@ -102,12 +107,22 @@ class LoginPage {
       `;
     }
 
-    // Check if there is a saved account for this role on this device with a PIN
+    // Check if there is a verified saved account with an active token on this device
     let savedAccount = null;
+    const roleToken = localStorage.getItem(`campusride_${role}_token`) || 
+                      (localStorage.getItem('campusride_app_role') === role ? localStorage.getItem('campusride_token') : null);
+
     try {
       const stored = localStorage.getItem(`campusride_saved_account_${role}`);
-      if (stored) savedAccount = JSON.parse(stored);
-    } catch {}
+      if (stored && roleToken) {
+        savedAccount = JSON.parse(stored);
+      } else if (stored && !roleToken) {
+        // Purge orphaned saved account when no active session token exists so user lands directly on Login page
+        localStorage.removeItem(`campusride_saved_account_${role}`);
+      }
+    } catch {
+      savedAccount = null;
+    }
 
     // -----------------------------------------------------------
     // SCREEN 1: 4-DIGIT PIN QUICK UNLOCK SCREEN (Returning Device)
@@ -140,7 +155,12 @@ class LoginPage {
                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                   Enter 4-Digit Security PIN
                 </label>
-                <input type="password" id="pin-login-input" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" autofocus class="cr-input font-mono font-black text-2xl tracking-widest text-center py-3 w-44 mx-auto block shadow-inner" placeholder="••••" autocomplete="one-time-code" />
+                <div class="relative flex items-center justify-center w-52 mx-auto">
+                  <input type="password" id="pin-login-input" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" autofocus class="cr-input font-mono font-black text-2xl tracking-widest text-center py-3 pr-11 w-full shadow-inner" placeholder="••••" autocomplete="one-time-code" />
+                  <button type="button" id="toggle-quick-pin" class="absolute right-2.5 p-1 text-base text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none" title="Toggle PIN visibility">
+                    👁️
+                  </button>
+                </div>
               </div>
 
               <button type="submit" id="pin-unlock-submit-btn" class="cr-btn ${btnClass} w-full py-2.5 font-bold cursor-pointer shadow-md transition">
@@ -256,6 +276,15 @@ class LoginPage {
       const submitBtn = document.getElementById('double-sec-submit-btn');
       const cancelBtn = document.getElementById('cancel-double-sec-btn');
 
+      const toggleSecPinBtn = document.getElementById('toggle-double-sec-pin');
+      if (toggleSecPinBtn && pinInput) {
+        toggleSecPinBtn.onclick = () => {
+          const isPass = pinInput.type === 'password';
+          pinInput.type = isPass ? 'text' : 'password';
+          toggleSecPinBtn.textContent = isPass ? '🙈' : '👁️';
+        };
+      }
+
       if (cancelBtn) {
         cancelBtn.onclick = () => {
           const role = LoginPage.pendingVerification?.role || 'staff';
@@ -348,6 +377,15 @@ class LoginPage {
         }
       };
 
+      const toggleQuickPinBtn = document.getElementById('toggle-quick-pin');
+      if (toggleQuickPinBtn && pinInput) {
+        toggleQuickPinBtn.onclick = () => {
+          const isPass = pinInput.type === 'password';
+          pinInput.type = isPass ? 'text' : 'password';
+          toggleQuickPinBtn.textContent = isPass ? '🙈' : '👁️';
+        };
+      }
+
       // Switch to password mode button
       const switchBtn = document.getElementById('switch-to-password-btn');
       if (switchBtn) {
@@ -355,6 +393,10 @@ class LoginPage {
           LoginPage.isPasswordMode = true;
           LoginPage.pendingVerification = null;
           const role = pinForm.getAttribute('data-role');
+          // Purge saved account and token so user has a fresh, standard Login screen
+          localStorage.removeItem(`campusride_saved_account_${role}`);
+          localStorage.removeItem(`campusride_${role}_token`);
+          sessionStorage.removeItem(`campusride_pin_unlocked_${role}`);
           const appEl = document.getElementById('app');
           if (appEl) {
             appEl.innerHTML = LoginPage.render(role);
