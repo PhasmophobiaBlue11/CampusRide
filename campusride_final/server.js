@@ -50,6 +50,11 @@ function syncBackupToFirebase(backup) {
       backup.drivers.forEach(d => { if (d && d.id) dMap[d.id] = d; });
       pushToFirebase('drivers', dMap);
     }
+    if (Array.isArray(backup.driver_profiles)) {
+      const dpMap = {};
+      backup.driver_profiles.forEach(dp => { if (dp && dp.id) dpMap[dp.id] = dp; });
+      pushToFirebase('driver_profiles', dpMap);
+    }
     if (Array.isArray(backup.users)) {
       const uMap = {};
       backup.users.forEach(u => { if (u && u.id) uMap[u.id] = u; });
@@ -280,6 +285,19 @@ function restoreFromFirebase() {
     for (const p of Object.values(parentsMap)) {
       if (p && p.id) {
         insertPar.run(p.id, p.user_id, p.name || '', p.phone || '', p.address || '', p.address_lat || 0, p.address_lng || 0, p.selected_van_id || null, p.selected_van_label || null);
+      }
+    }
+  });
+
+  // 5. Restore van drivers
+  fetchEndpoint('drivers', (driversMap) => {
+    const insertDriver = db.prepare(`
+      INSERT OR IGNORE INTO drivers (id, label, type, driver_name, license_number, van_no, phone, vehicle_type, raw_data, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const d of Object.values(driversMap)) {
+      if (d && d.id && d.type === 'van') {
+        insertDriver.run(d.id, d.label, 'van', d.driver_name || '', d.license_number || '', d.van_no || '', d.phone || '', d.vehicle_type || '4_wheeler', d.raw_data || '', d.created_at || new Date().toISOString());
       }
     }
   });
@@ -1302,12 +1320,22 @@ const server = http.createServer(async (req, res) => {
         if ((user.username && user.username.toLowerCase() === PERMANENT_ADMIN_USERNAME.toLowerCase()) || (user.email && user.email.toLowerCase() === PERMANENT_ADMIN_USERNAME.toLowerCase())) {
           return sendError(res, 403, 'The Permanent Master Administrator account cannot be deleted.');
         }
+
+        // Clean up any driver van entries if this was a driver
+        const dp = db.prepare('SELECT selected_van_id FROM driver_profiles WHERE user_id = ?').get(user.id);
+        if (dp && dp.selected_van_id) {
+          db.prepare('DELETE FROM van_locations WHERE van_id = ?').run(dp.selected_van_id);
+          db.prepare('DELETE FROM drivers WHERE id = ?').run(dp.selected_van_id);
+        }
+
+        db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
         db.prepare('DELETE FROM children WHERE parent_id = ?').run(user.id);
         db.prepare('DELETE FROM parents WHERE user_id = ?').run(user.id);
         db.prepare('DELETE FROM driver_profiles WHERE user_id = ?').run(user.id);
         db.prepare('DELETE FROM staff_requests WHERE user_id = ?').run(user.id);
-        db.prepare('UPDATE users SET blocked = 1 WHERE id = ?').run(user.id);
-        return sendJson(res, 200, { success: true });
+        db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+        saveBackupJson();
+        return sendJson(res, 200, { success: true, message: 'Account deleted successfully.' });
       }
 
       // ADMIN: Get all staff requests

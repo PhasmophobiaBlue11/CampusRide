@@ -1,18 +1,6 @@
 {
   "users": [
     {
-      "id": "usr_drv_f02b8f2e050ce06d",
-      "email": "Driver2026",
-      "password_hash": "63514ae1a9e935821fa45fde459e366a469705582b83871939fe08d05e9fb349",
-      "role": "user",
-      "display_name": "Parth Raut",
-      "phone": "7030951190",
-      "blocked": 0,
-      "created_at": "2026-11-24T06:43:23.183Z",
-      "username": "Driver2026",
-      "pin": "1234"
-    },
-    {
       "id": "usr_par_ac686ce3be8215ce",
       "email": "Parent2026",
       "password_hash": "63514ae1a9e935821fa45fde459e366a469705582b83871939fe08d05e9fb349",
@@ -1297,30 +1285,9 @@
       "vehicle_type": "walk_in",
       "raw_data": "Name: Dipti Kamozalwar",
       "created_at": "2026-11-19T15:53:21.065Z"
-    },
-    {
-      "id": "drv_van_9ae8ad239c945094",
-      "label": "Van 1",
-      "type": "van",
-      "driver_name": "Parth Raut",
-      "license_number": "",
-      "van_no": "MH 31 DC 9122",
-      "phone": "7030951190",
-      "vehicle_type": "4_wheeler",
-      "raw_data": "Name: Parth Raut, Van: MH 31 DC 9122",
-      "created_at": "2026-11-24T06:43:23.183Z"
     }
   ],
-  "driver_profiles": [
-    {
-      "id": "dp_parth_raut",
-      "user_id": "usr_drv_f02b8f2e050ce06d",
-      "name": "Parth Raut",
-      "phone": "7030951190",
-      "selected_van_id": "drv_van_9ae8ad239c945094",
-      "selected_van_label": "Van 1"
-    }
-  ],
+  "driver_profiles": [],
   "parents": [
     {
       "id": "par_4160612bbdc4d647",
