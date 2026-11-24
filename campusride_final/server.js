@@ -14,6 +14,15 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 // Initialize SQLite Database
 const db = new DatabaseSync(DB_PATH);
 
+// Database Engine Safety & Auto-Recovery (WAL mode & auto-rebuild corrupted indexes)
+try {
+  db.exec('PRAGMA journal_mode = WAL;');
+  db.exec('PRAGMA synchronous = NORMAL;');
+  db.exec('REINDEX;');
+} catch (e) {
+  console.warn('[CampusRide] Notice initializing database engine:', e.message);
+}
+
 // Helper: Run schema migrations
 // Permanent Master Administrator
 const PERMANENT_ADMIN_USERNAME = 'Admin2026';
@@ -621,17 +630,26 @@ function getUserProfile(userId) {
 // Auto-label helper for sequential numbering (e.g. Van 1, Van 2, Van 3)
 function getNextLabel(type) {
   const prefix = type === 'van' ? 'Van ' : 'Staff ';
-  const rows = db.prepare('SELECT label FROM drivers WHERE type = ?').all(type);
+  const rows = db.prepare('SELECT label FROM drivers').all();
   const usedNumbers = new Set();
   for (const row of rows) {
-    if (row.label.startsWith(prefix)) {
+    if (row.label && row.label.startsWith(prefix)) {
       const num = parseInt(row.label.slice(prefix.length), 10);
       if (!isNaN(num)) usedNumbers.add(num);
     }
   }
   let next = 1;
   while (usedNumbers.has(next)) next++;
-  return `${prefix}${next}`;
+  while (true) {
+    const candidate = `${prefix}${next}`;
+    try {
+      const exists = db.prepare('SELECT count(*) as cnt FROM drivers WHERE label = ?').get(candidate);
+      if (!exists || exists.cnt === 0) return candidate;
+    } catch (e) {
+      return candidate;
+    }
+    next++;
+  }
 }
 
 // Renumber remaining drivers after a deletion as per PRD requirement §7.3
@@ -1076,34 +1094,46 @@ const server = http.createServer(async (req, res) => {
 
         const newUserId = generateId('usr_drv');
         const now = new Date().toISOString();
+        let vanId = null;
 
-        db.prepare(`
-          INSERT INTO users (id, username, email, password_hash, role, display_name, phone, blocked, pin, created_at)
-          VALUES (?, ?, ?, ?, 'user', ?, ?, 0, ?, ?)
-        `).run(newUserId, rawUser, rawUser, hashPassword(password), fullName.trim(), phone.trim(), pinClean, now);
+        try {
+          db.prepare(`
+            INSERT INTO users (id, username, email, password_hash, role, display_name, phone, blocked, pin, created_at)
+            VALUES (?, ?, ?, ?, 'user', ?, ?, 0, ?, ?)
+          `).run(newUserId, rawUser, rawUser, hashPassword(password), fullName.trim(), phone.trim(), pinClean, now);
 
-        const nextLabel = getNextLabel('van');
-        const vanId = generateId('drv_van');
-        db.prepare(`
-          INSERT INTO drivers (id, label, type, driver_name, license_number, van_no, phone, vehicle_type, raw_data, created_at)
-          VALUES (?, ?, 'van', ?, '', ?, ?, ?, ?, ?)
-        `).run(vanId, nextLabel, fullName.trim(), vehicleNo.trim().toUpperCase(), phone.trim(), vehicleType || '4_wheeler', `Name: ${fullName}, Van: ${vehicleNo}`, now);
+          const nextLabel = getNextLabel('van');
+          vanId = generateId('drv_van');
+          db.prepare(`
+            INSERT INTO drivers (id, label, type, driver_name, license_number, van_no, phone, vehicle_type, raw_data, created_at)
+            VALUES (?, ?, 'van', ?, '', ?, ?, ?, ?, ?)
+          `).run(vanId, nextLabel, fullName.trim(), vehicleNo.trim().toUpperCase(), phone.trim(), vehicleType || '4_wheeler', `Name: ${fullName}, Van: ${vehicleNo}`, now);
 
-        db.prepare(`
-          INSERT INTO driver_profiles (id, user_id, name, phone, selected_van_id, selected_van_label)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).run(generateId('dp'), newUserId, fullName.trim(), phone.trim(), vanId, nextLabel);
+          db.prepare(`
+            INSERT INTO driver_profiles (id, user_id, name, phone, selected_van_id, selected_van_label)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(generateId('dp'), newUserId, fullName.trim(), phone.trim(), vanId, nextLabel);
 
-        db.prepare(`
-          INSERT INTO van_locations (van_id, van_label, lat, lng, live, updated_at)
-          VALUES (?, ?, 0, 0, 0, ?)
-        `).run(vanId, nextLabel, now);
+          db.prepare(`
+            INSERT INTO van_locations (van_id, van_label, lat, lng, live, updated_at)
+            VALUES (?, ?, 0, 0, 0, ?)
+          `).run(vanId, nextLabel, now);
 
-        const token = createToken(newUserId);
-        const profile = getUserProfile(newUserId);
-        broadcastEvent('driver_registered', { vanId, nextLabel });
-        saveBackupJson();
-        return sendJson(res, 201, { token, user: profile, message: 'Driver registered successfully!' });
+          const token = createToken(newUserId);
+          const profile = getUserProfile(newUserId);
+          broadcastEvent('driver_registered', { vanId, nextLabel });
+          saveBackupJson();
+          return sendJson(res, 201, { token, user: profile, message: 'Driver registered successfully!' });
+        } catch (regErr) {
+          console.error('[CampusRide] Driver registration failed, rolling back:', regErr.message);
+          try { db.prepare('DELETE FROM users WHERE id = ?').run(newUserId); } catch(e){}
+          if (vanId) {
+            try { db.prepare('DELETE FROM drivers WHERE id = ?').run(vanId); } catch(e){}
+            try { db.prepare('DELETE FROM van_locations WHERE van_id = ?').run(vanId); } catch(e){}
+          }
+          try { db.prepare('DELETE FROM driver_profiles WHERE user_id = ?').run(newUserId); } catch(e){}
+          return sendError(res, 500, 'Registration encountered an error. Please try again: ' + regErr.message);
+        }
       }
 
       // AUTH: Register Parent (with 4-Digit Security PIN)
@@ -1131,20 +1161,26 @@ const server = http.createServer(async (req, res) => {
         const newUserId = generateId('usr_par');
         const now = new Date().toISOString();
 
-        db.prepare(`
-          INSERT INTO users (id, username, email, password_hash, role, display_name, phone, blocked, pin, created_at)
-          VALUES (?, ?, ?, ?, 'user', ?, ?, 0, ?, ?)
-        `).run(newUserId, rawUser, rawUser, hashPassword(password), fullName.trim(), phone.trim(), pinClean, now);
+        try {
+          db.prepare(`
+            INSERT INTO users (id, username, email, password_hash, role, display_name, phone, blocked, pin, created_at)
+            VALUES (?, ?, ?, ?, 'user', ?, ?, 0, ?, ?)
+          `).run(newUserId, rawUser, rawUser, hashPassword(password), fullName.trim(), phone.trim(), pinClean, now);
 
-        db.prepare(`
-          INSERT INTO parents (id, user_id, name, phone, address, address_lat, address_lng, selected_van_id, selected_van_label)
-          VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)
-        `).run(generateId('par'), newUserId, fullName.trim(), phone.trim(), address || '', lat || 0, lng || 0);
+          db.prepare(`
+            INSERT INTO parents (id, user_id, name, phone, address, address_lat, address_lng, selected_van_id, selected_van_label)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)
+          `).run(generateId('par'), newUserId, fullName.trim(), phone.trim(), address || '', lat || 0, lng || 0);
 
-        const token = createToken(newUserId);
-        const profile = getUserProfile(newUserId);
-        saveBackupJson();
-        return sendJson(res, 201, { token, user: profile, message: 'Parent account created successfully!' });
+          const token = createToken(newUserId);
+          const profile = getUserProfile(newUserId);
+          saveBackupJson();
+          return sendJson(res, 201, { token, user: profile, message: 'Parent account created successfully!' });
+        } catch (parErr) {
+          console.error('[CampusRide] Parent registration failed, rolling back:', parErr.message);
+          try { db.prepare('DELETE FROM users WHERE id = ?').run(newUserId); } catch(e){}
+          return sendError(res, 500, 'Registration encountered an error: ' + parErr.message);
+        }
       }
 
       // AUTH: Forgot Password (Phone Number + Username + New Password) — For Every Role
