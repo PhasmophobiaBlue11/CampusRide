@@ -119,11 +119,15 @@ class ApiClient {
   }
 
   // Auth methods
-  async login(username, password, required_role) {
+  async login(username, password, required_role, pin = null) {
     const res = await this.request('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ username, email: username, password, required_role })
+      body: JSON.stringify({ username, email: username, password, pin, required_role })
     });
+    // If double security 4-digit PIN is required, return response to trigger Step 2 in UI
+    if (res && res.requiresPin) {
+      return res;
+    }
     if (required_role) {
       localStorage.setItem(`campusride_${required_role}_token`, res.token);
       localStorage.setItem('campusride_app_role', required_role);

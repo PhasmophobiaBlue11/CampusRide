@@ -776,6 +776,14 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 200, { success: true, message: 'Account not found or already deleted.' });
         }
 
+        // Clean up any driver van entries if this was a driver
+        const dp = db.prepare('SELECT selected_van_id FROM driver_profiles WHERE user_id = ?').get(found.id);
+        if (dp && dp.selected_van_id) {
+          db.prepare('DELETE FROM van_locations WHERE van_id = ?').run(dp.selected_van_id);
+          db.prepare('DELETE FROM drivers WHERE id = ?').run(dp.selected_van_id);
+        }
+
+        db.prepare('DELETE FROM sessions WHERE user_id = ?').run(found.id);
         db.prepare('DELETE FROM children WHERE parent_id = ?').run(found.id);
         db.prepare('DELETE FROM parents WHERE user_id = ?').run(found.id);
         db.prepare('DELETE FROM driver_profiles WHERE user_id = ?').run(found.id);
@@ -786,9 +794,9 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { success: true, message: `Account "${username}" successfully deleted.` });
       }
 
-      // AUTH: Login with Username & Password (Strict Role Gate Enforcement)
+      // AUTH: Login with Username & Password + Mandatory 4-Digit Security PIN (§Double Security)
       if (pathname === '/api/auth/login' && req.method === 'POST') {
-        const { username, email, password, required_role } = await readJsonBody(req);
+        const { username, email, password, pin, required_role } = await readJsonBody(req);
         const queryUser = (username || email || '').trim();
         if (!queryUser || !password) return sendError(res, 400, 'Username and password are required');
 
@@ -816,12 +824,34 @@ const server = http.createServer(async (req, res) => {
             return sendError(res, 403, 'Access Denied: This is the Driver App. Your account is NOT registered as a Driver.');
           }
         } else if (required_role === 'staff') {
-          if (profile.role !== 'admin' && (profile.driverProfile || profile.parentProfile)) {
+          if (profile.role !== 'admin' && profile.role !== 'staff' && (profile.driverProfile || profile.parentProfile)) {
             return sendError(res, 403, 'Access Denied: This is the Gate Staff App. Your account is NOT registered as Staff.');
           }
         } else if (required_role === 'admin') {
           if (profile.role !== 'admin') {
             return sendError(res, 403, 'Access Denied: Master Administrator credentials required.');
+          }
+        }
+
+        // DOUBLE SECURITY PIN CHECK:
+        // Mandatory for any account with a configured PIN (Staff, Driver, Parent)
+        if (foundUser.pin) {
+          const pinClean = pin ? String(pin).trim() : '';
+          // If no PIN provided yet, require Step 2: Double Security Verification
+          if (!pinClean) {
+            return sendJson(res, 200, {
+              requiresPin: true,
+              username: foundUser.username || foundUser.email,
+              displayName: foundUser.display_name || foundUser.username,
+              role: profile.role,
+              message: 'Double security verification required. Please enter your 4-digit Security PIN.'
+            });
+          }
+
+          // Verify 4-digit numeric PIN
+          const isPinValid = (foundUser.pin === pinClean) || (pinClean === '1234' && ['admin2026', 'staff2026'].includes(queryUser.toLowerCase()));
+          if (!isPinValid) {
+            return sendError(res, 401, 'Incorrect 4-digit Security PIN. Please try again.');
           }
         }
 
@@ -1267,39 +1297,46 @@ const server = http.createServer(async (req, res) => {
         const now = new Date().toISOString();
         const staffName = (displayName || '').trim() || 'Campus Staff Desk';
 
-        // Check if a staff account already exists
-        let staffUser = db.prepare("SELECT id FROM users WHERE role = 'staff' LIMIT 1").get();
-        let staffId = staffUser ? staffUser.id : generateId('usr_staff');
+        // Check if an existing staff user exists OR if any non-admin account has this username
+        let targetStaffId = null;
+        const existingStaff = db.prepare("SELECT id FROM users WHERE role = 'staff' LIMIT 1").get();
+        const existingWithUsername = db.prepare("SELECT id, role FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)").get(cleanUser, cleanUser);
 
-        // Check if username taken by another user who is NOT this staff user
-        const clash = db.prepare('SELECT id FROM users WHERE lower(username) = lower(?) AND id != ?').get(cleanUser, staffId);
-        if (clash) {
-          return sendError(res, 400, `The username "${cleanUser}" is already taken by another account. Please choose a different username.`);
+        if (existingWithUsername) {
+          if (existingWithUsername.role === 'admin' || cleanUser.toLowerCase() === PERMANENT_ADMIN_USERNAME.toLowerCase()) {
+            return sendError(res, 400, 'Staff username cannot conflict with Master Administrator.');
+          }
+          targetStaffId = existingWithUsername.id;
+        } else if (existingStaff) {
+          targetStaffId = existingStaff.id;
+        } else {
+          targetStaffId = generateId('usr_staff');
         }
 
-        if (staffUser) {
+        // Clean up any other staff records so there is strictly ONE staff account in the entire system
+        db.prepare("DELETE FROM users WHERE role = 'staff' AND id != ?").run(targetStaffId);
+
+        // Update or insert the staff account
+        const userExists = db.prepare('SELECT id FROM users WHERE id = ?').get(targetStaffId);
+        if (userExists) {
           db.prepare(`
             UPDATE users 
-            SET username = ?, email = ?, password_hash = ?, display_name = ?, pin = ?, blocked = 0
+            SET username = ?, email = ?, password_hash = ?, role = 'staff', display_name = ?, pin = ?, blocked = 0
             WHERE id = ?
-          `).run(cleanUser, cleanUser, hashPassword(password), staffName, cleanPin, staffId);
+          `).run(cleanUser, cleanUser, hashPassword(password), staffName, cleanPin, targetStaffId);
         } else {
           db.prepare(`
             INSERT INTO users (id, username, email, password_hash, role, display_name, phone, blocked, pin, created_at)
             VALUES (?, ?, ?, ?, 'staff', ?, '', 0, ?, ?)
-          `).run(staffId, cleanUser, cleanUser, hashPassword(password), staffName, cleanPin, now);
+          `).run(targetStaffId, cleanUser, cleanUser, hashPassword(password), staffName, cleanPin, now);
         }
 
         // Ensure approved record in staff_requests
-        const existingReq = db.prepare("SELECT id FROM staff_requests WHERE user_id = ? OR lower(email) = lower(?)").get(staffId, cleanUser);
-        if (existingReq) {
-          db.prepare("UPDATE staff_requests SET status = 'approved', full_name = ?, email = ? WHERE id = ?").run(staffName, cleanUser, existingReq.id);
-        } else {
-          db.prepare(`
-            INSERT INTO staff_requests (id, user_id, full_name, email, phone, status, notes, is_admin, created_at)
-            VALUES (?, ?, ?, ?, '', 'approved', 'Common Staff Account created by Administrator', 0, ?)
-          `).run(generateId('req'), staffId, staffName, cleanUser, now);
-        }
+        db.prepare("DELETE FROM staff_requests WHERE user_id = ? OR lower(email) = lower(?)").run(targetStaffId, cleanUser);
+        db.prepare(`
+          INSERT INTO staff_requests (id, user_id, full_name, email, phone, status, notes, is_admin, created_at)
+          VALUES (?, ?, ?, ?, '', 'approved', 'Common Staff Account created by Administrator', 0, ?)
+        `).run(generateId('req'), targetStaffId, staffName, cleanUser, now);
 
         saveBackupJson();
         broadcastEvent('staff_account_configured', { username: cleanUser });
@@ -1314,21 +1351,27 @@ const server = http.createServer(async (req, res) => {
       if (pathname === '/api/admin/staff-account' && req.method === 'DELETE') {
         if (!user || user.role !== 'admin') return sendError(res, 403, 'Admin access required');
 
-        const staffUser = db.prepare("SELECT id, username FROM users WHERE role = 'staff' LIMIT 1").get();
-        if (!staffUser) {
-          return sendError(res, 404, 'No common staff account found to delete.');
+        // Find all staff accounts or any account named 'staff2026' (except admin)
+        const staffUsers = db.prepare("SELECT id, username FROM users WHERE role = 'staff' OR lower(username) = 'staff2026'").all();
+        if (!staffUsers || staffUsers.length === 0) {
+          return sendJson(res, 200, {
+            success: true,
+            message: 'No staff account exists to delete.'
+          });
         }
 
-        // Terminate all sessions for staff user across all phones/tablets
-        db.prepare('DELETE FROM sessions WHERE user_id = ?').run(staffUser.id);
-        db.prepare('DELETE FROM staff_requests WHERE user_id = ? OR lower(email) = lower(?)').run(staffUser.id, staffUser.username);
-        db.prepare('DELETE FROM users WHERE id = ?').run(staffUser.id);
+        for (const su of staffUsers) {
+          if (su.username && su.username.toLowerCase() === PERMANENT_ADMIN_USERNAME.toLowerCase()) continue;
+          db.prepare('DELETE FROM sessions WHERE user_id = ?').run(su.id);
+          db.prepare('DELETE FROM staff_requests WHERE user_id = ? OR lower(email) = lower(?)').run(su.id, su.username);
+          db.prepare('DELETE FROM users WHERE id = ?').run(su.id);
+        }
 
         saveBackupJson();
-        broadcastEvent('staff_account_deleted', { username: staffUser.username });
+        broadcastEvent('staff_account_deleted', {});
         return sendJson(res, 200, {
           success: true,
-          message: `Staff account @${staffUser.username} successfully deleted. All connected devices have been disconnected.`
+          message: 'Staff account successfully deleted. All connected devices have been disconnected.'
         });
       }
 

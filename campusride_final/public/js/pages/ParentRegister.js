@@ -128,6 +128,8 @@ class ParentRegisterPage {
             });
 
             localStorage.removeItem('campusride_account_created_parent');
+            localStorage.removeItem('campusride_saved_account_parent');
+            sessionStorage.removeItem('campusride_pin_unlocked_parent');
             localStorage.removeItem('campusride_device_parent_username');
             localStorage.removeItem('campusride_parent_token');
             window.showToast(`Account "@${existingDeviceUser}" deleted. You can now register a new account.`, 'success');

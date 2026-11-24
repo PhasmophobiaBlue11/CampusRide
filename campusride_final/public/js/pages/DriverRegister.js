@@ -146,6 +146,8 @@ class DriverRegisterPage {
             });
 
             localStorage.removeItem('campusride_account_created_driver');
+            localStorage.removeItem('campusride_saved_account_driver');
+            sessionStorage.removeItem('campusride_pin_unlocked_driver');
             localStorage.removeItem('campusride_device_driver_username');
             localStorage.removeItem('campusride_driver_token');
             window.showToast(`Driver account "@${existingDeviceUser}" deleted. You can now register a new driver.`, 'success');

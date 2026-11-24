@@ -1,6 +1,6 @@
 // CampusRide — Dedicated Isolated App Logins (§7.1)
 // Completely separate portals with ZERO role-switch tabs or cross-role confusion.
-// Supports 4-Digit Security PIN Quick Unlock for returning devices.
+// Supports 4-Digit Security PIN Quick Unlock for returning devices and mandatory Double Security.
 // - Driver App: #/driver or /driver
 // - Parent App: #/parent or /parent
 // - Gate Staff App: #/staff or /staff
@@ -8,6 +8,7 @@
 
 class LoginPage {
   static isPasswordMode = false;
+  static pendingVerification = null;
 
   static render(role = 'staff') {
     const isDriver = role === 'driver';
@@ -43,6 +44,63 @@ class LoginPage {
                                 isParent ? 'Enter parent username' :
                                 isAdmin ? 'Admin2026' :
                                 'Enter staff username';
+
+    // -----------------------------------------------------------
+    // SCREEN 0: MANDATORY DOUBLE SECURITY PIN VERIFICATION (Step 2)
+    // -----------------------------------------------------------
+    if (LoginPage.pendingVerification) {
+      const pending = LoginPage.pendingVerification;
+      return `
+        <div class="min-h-screen flex items-center justify-center p-4 relative z-10">
+          <div class="cr-card w-full max-w-md p-6 sm:p-8 animate-fade-in-up text-center space-y-6">
+            
+            <!-- Brand / Security Header -->
+            <div>
+              <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-tr ${portalAccent} flex items-center justify-center text-white shadow-xl text-3xl">
+                🛡️
+              </div>
+              <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Double Security Check</h1>
+              <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-xs font-bold mt-2">
+                <span>🔒</span> Mandatory Step 2 of 2: Security PIN
+              </div>
+            </div>
+
+            <!-- Verified Account Information Card -->
+            <div class="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
+              <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Credentials Verified</span>
+              <div class="font-mono font-black text-lg text-blue-600 dark:text-blue-400 mt-0.5">
+                @${pending.username}
+              </div>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Please enter the 4-digit Security PIN for this account to complete sign in.
+              </p>
+            </div>
+
+            <!-- PIN Form -->
+            <form id="double-sec-form" class="space-y-4" autocomplete="off">
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Enter 4-Digit Security PIN
+                </label>
+                <input type="password" id="double-sec-pin-input" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" autofocus class="cr-input font-mono font-black text-2xl tracking-widest text-center py-3 w-44 mx-auto block shadow-inner" placeholder="••••" autocomplete="one-time-code" />
+              </div>
+
+              <button type="submit" id="double-sec-submit-btn" class="cr-btn ${btnClass} w-full py-2.5 font-bold cursor-pointer shadow-md transition">
+                🔓 Verify PIN & Complete Sign In
+              </button>
+            </form>
+
+            <!-- Cancel / Back Button -->
+            <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button type="button" id="cancel-double-sec-btn" class="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-white hover:underline cursor-pointer">
+                ← Back to Username & Password
+              </button>
+            </div>
+
+          </div>
+        </div>
+      `;
+    }
 
     // Check if there is a saved account for this role on this device with a PIN
     let savedAccount = null;
@@ -191,7 +249,67 @@ class LoginPage {
   }
 
   static attachEvents() {
-    // 1. PIN Quick Unlock Form Handler
+    // 0. Double Security 4-Digit PIN Form Handler (Step 2 of Login)
+    const doubleSecForm = document.getElementById('double-sec-form');
+    if (doubleSecForm) {
+      const pinInput = document.getElementById('double-sec-pin-input');
+      const submitBtn = document.getElementById('double-sec-submit-btn');
+      const cancelBtn = document.getElementById('cancel-double-sec-btn');
+
+      if (cancelBtn) {
+        cancelBtn.onclick = () => {
+          const role = LoginPage.pendingVerification?.role || 'staff';
+          LoginPage.pendingVerification = null;
+          const appEl = document.getElementById('app');
+          if (appEl) {
+            appEl.innerHTML = LoginPage.render(role);
+            LoginPage.attachEvents();
+          }
+        };
+      }
+
+      doubleSecForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const pin = pinInput.value.trim();
+        const pending = LoginPage.pendingVerification;
+        if (!pending) return;
+
+        if (!pin || pin.length !== 4) {
+          return window.showToast('Please enter your 4-digit PIN', 'error');
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Verifying PIN...';
+
+        try {
+          const user = await window.api.login(pending.username, pending.password, pending.role, pin);
+          window.showToast('Signed in successfully with double security!', 'success');
+
+          // Save account for quick 4-digit PIN unlock next time on this device
+          localStorage.setItem(`campusride_saved_account_${pending.role}`, JSON.stringify({
+            username: user.username || pending.username,
+            role: pending.role,
+            hasPin: true
+          }));
+          sessionStorage.setItem(`campusride_pin_unlocked_${pending.role}`, 'true');
+          LoginPage.pendingVerification = null;
+          LoginPage.isPasswordMode = false;
+
+          localStorage.setItem('campusride_app_role', pending.role);
+          window.location.hash = '#/';
+          window.location.reload();
+        } catch (err) {
+          window.showToast(err.message, 'error');
+          submitBtn.disabled = false;
+          submitBtn.textContent = '🔓 Verify PIN & Complete Sign In';
+          pinInput.value = '';
+          pinInput.focus();
+        }
+      };
+      return;
+    }
+
+    // 1. PIN Quick Unlock Form Handler (Returning Device)
     const pinForm = document.getElementById('pin-login-form');
     if (pinForm) {
       const pinInput = document.getElementById('pin-login-input');
@@ -235,6 +353,7 @@ class LoginPage {
       if (switchBtn) {
         switchBtn.onclick = () => {
           LoginPage.isPasswordMode = true;
+          LoginPage.pendingVerification = null;
           const role = pinForm.getAttribute('data-role');
           const appEl = document.getElementById('app');
           if (appEl) {
@@ -262,6 +381,7 @@ class LoginPage {
     if (switchToPinBtn) {
       switchToPinBtn.onclick = () => {
         LoginPage.isPasswordMode = false;
+        LoginPage.pendingVerification = null;
         const targetRole = document.getElementById('login-target-role').value;
         const appEl = document.getElementById('app');
         if (appEl) {
@@ -281,20 +401,32 @@ class LoginPage {
         const btn = document.getElementById('login-submit-btn');
 
         btn.disabled = true;
-        btn.textContent = 'Verifying...';
+        btn.textContent = 'Verifying credentials...';
 
         try {
-          const user = await window.api.login(username, password, targetRole);
-          window.showToast('Signed in successfully!', 'success');
+          const res = await window.api.login(username, password, targetRole);
 
-          // Save account for quick 4-digit PIN unlock next time on this device
-          localStorage.setItem(`campusride_saved_account_${targetRole}`, JSON.stringify({
-            username: user.username || username,
-            role: targetRole,
-            hasPin: true
-          }));
+          // If double security PIN is required, transition to Step 2
+          if (res && res.requiresPin) {
+            LoginPage.pendingVerification = {
+              username: res.username || username,
+              password,
+              role: targetRole,
+              displayName: res.displayName || username
+            };
+            const appEl = document.getElementById('app');
+            if (appEl) {
+              appEl.innerHTML = LoginPage.render(targetRole);
+              LoginPage.attachEvents();
+            }
+            return;
+          }
+
+          // If no PIN required (e.g. Master Admin without PIN)
+          window.showToast('Signed in successfully!', 'success');
           sessionStorage.setItem(`campusride_pin_unlocked_${targetRole}`, 'true');
           LoginPage.isPasswordMode = false;
+          LoginPage.pendingVerification = null;
 
           // Remember role in session
           localStorage.setItem('campusride_app_role', targetRole);
