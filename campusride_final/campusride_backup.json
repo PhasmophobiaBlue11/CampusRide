@@ -1,6 +1,30 @@
 {
   "users": [
     {
+      "id": "usr_drv_f02b8f2e050ce06d",
+      "email": "Driver2026",
+      "password_hash": "63514ae1a9e935821fa45fde459e366a469705582b83871939fe08d05e9fb349",
+      "role": "user",
+      "display_name": "Parth Raut",
+      "phone": "7030951190",
+      "blocked": 0,
+      "created_at": "2026-11-24T06:43:23.183Z",
+      "username": "Driver2026",
+      "pin": "1234"
+    },
+    {
+      "id": "usr_par_ac686ce3be8215ce",
+      "email": "Parent2026",
+      "password_hash": "63514ae1a9e935821fa45fde459e366a469705582b83871939fe08d05e9fb349",
+      "role": "user",
+      "display_name": "Soham Deshpande",
+      "phone": "7218134184",
+      "blocked": 0,
+      "created_at": "2026-11-24T06:46:51.023Z",
+      "username": "Parent2026",
+      "pin": "1234"
+    },
+    {
       "id": "usr_perm_admin",
       "email": "Admin2026",
       "password_hash": "63514ae1a9e935821fa45fde459e366a469705582b83871939fe08d05e9fb349",
@@ -10,22 +34,22 @@
       "blocked": 0,
       "created_at": "2026-11-07T08:35:00.000Z",
       "username": "Admin2026",
-      "pin": null
+      "pin": "1234"
+    },
+    {
+      "id": "usr_staff_2e4005f37d53ad6d",
+      "email": "Staff2026",
+      "password_hash": "63514ae1a9e935821fa45fde459e366a469705582b83871939fe08d05e9fb349",
+      "role": "staff",
+      "display_name": "Campus Staff Desk",
+      "phone": "",
+      "blocked": 0,
+      "created_at": "2026-11-24T06:41:42.155Z",
+      "username": "Staff2026",
+      "pin": "1234"
     }
   ],
   "drivers": [
-    {
-      "id": "drv_van_9986abb8c2b46701",
-      "label": "Van 1",
-      "type": "van",
-      "driver_name": "Ramesh Sharma",
-      "license_number": "",
-      "van_no": "MH 31 DC 9122",
-      "phone": "7218134184",
-      "vehicle_type": "4_wheeler",
-      "raw_data": "Name: Ramesh Sharma, Van: MH 31 DC 9122",
-      "created_at": "2026-11-07T08:35:00.000Z"
-    },
     {
       "id": "drv_ee90dd302b792ff6",
       "label": "Staff 1",
@@ -1244,9 +1268,9 @@
       "type": "staff",
       "driver_name": "Anuja Deshpande",
       "license_number": "",
-      "van_no": "STAFF PASS",
+      "van_no": "MH 31 DC 9633",
       "phone": "",
-      "vehicle_type": "walk_in",
+      "vehicle_type": "4_wheeler",
       "raw_data": "Name: Anuja Deshpande",
       "created_at": "2026-11-19T15:53:19.861Z"
     },
@@ -1275,34 +1299,68 @@
       "created_at": "2026-11-19T15:53:21.065Z"
     },
     {
-      "id": "drv_van_6af223b83839ae71",
-      "label": "Van 2",
+      "id": "drv_van_9ae8ad239c945094",
+      "label": "Van 1",
       "type": "van",
-      "driver_name": "Ramu Chandan",
+      "driver_name": "Parth Raut",
       "license_number": "",
-      "van_no": "MH 12 CD 9999",
-      "phone": "9876543210",
+      "van_no": "MH 31 DC 9122",
+      "phone": "7030951190",
       "vehicle_type": "4_wheeler",
-      "raw_data": "Name: Ramu Chandan, Van: MH 12 CD 9999",
-      "created_at": "2026-11-24T04:48:26.610Z"
-    },
-    {
-      "id": "drv_van_70fc97417b910a75",
-      "label": "Van 3",
-      "type": "van",
-      "driver_name": "Ramu Chandan",
-      "license_number": "",
-      "van_no": "MH 12 CD 9999",
-      "phone": "9876543210",
-      "vehicle_type": "4_wheeler",
-      "raw_data": "Name: Ramu Chandan, Van: MH 12 CD 9999",
-      "created_at": "2026-11-24T04:48:41.459Z"
+      "raw_data": "Name: Parth Raut, Van: MH 31 DC 9122",
+      "created_at": "2026-11-24T06:43:23.183Z"
     }
   ],
-  "driver_profiles": [],
-  "parents": [],
+  "driver_profiles": [
+    {
+      "id": "dp_parth_raut",
+      "user_id": "usr_drv_f02b8f2e050ce06d",
+      "name": "Parth Raut",
+      "phone": "7030951190",
+      "selected_van_id": "drv_van_9ae8ad239c945094",
+      "selected_van_label": "Van 1"
+    }
+  ],
+  "parents": [
+    {
+      "id": "par_4160612bbdc4d647",
+      "user_id": "usr_par_ac686ce3be8215ce",
+      "name": "Soham Deshpande",
+      "phone": "7218134184",
+      "address": "",
+      "address_lat": 0,
+      "address_lng": 0,
+      "selected_van_id": "drv_van_9ae8ad239c945094",
+      "selected_van_label": "Van 1"
+    }
+  ],
   "children": [],
   "staff_requests": [],
-  "sessions": [],
+  "sessions": [
+    {
+      "token": "cr_a0f756948b586e7841765a43a74a5050fd42ae9da6cbc56c",
+      "user_id": "usr_drv_f02b8f2e050ce06d",
+      "created_at": 1795503913867,
+      "last_active": 1795503913867
+    },
+    {
+      "token": "cr_6e0bf5fb9ef1d0f5d5ee20e1626bc10dc3963bbd2a348024",
+      "user_id": "usr_drv_f02b8f2e050ce06d",
+      "created_at": 1795503913918,
+      "last_active": 1795503913918
+    },
+    {
+      "token": "cr_d442fb36e952a084f3313ee5f45add2ede51e615320a3d69",
+      "user_id": "usr_drv_f02b8f2e050ce06d",
+      "created_at": 1795503913936,
+      "last_active": 1795503913936
+    },
+    {
+      "token": "cr_efc3a57caf28f5600946d18cb1094d1d0d8747ea9fe0041b",
+      "user_id": "usr_drv_f02b8f2e050ce06d",
+      "created_at": 1795503913970,
+      "last_active": 1795503913970
+    }
+  ],
   "van_logs": []
 }

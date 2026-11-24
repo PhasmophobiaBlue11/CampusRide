@@ -217,14 +217,16 @@ class ParentRegisterPage {
             })
           });
 
-          // Save device creation lock, quick PIN account, and token
+          // Save 1-account-per-device creation lock
           localStorage.setItem('campusride_account_created_parent', username);
-          localStorage.setItem('campusride_saved_account_parent', JSON.stringify({ username, role: 'parent', hasPin: true }));
-          localStorage.setItem('campusride_parent_token', res.token);
+          // Set role and ensure user lands directly on Login page
           localStorage.setItem('campusride_app_role', 'parent');
-          window.api.setToken(res.token);
+          localStorage.removeItem('campusride_saved_account_parent');
+          localStorage.removeItem('campusride_parent_token');
+          sessionStorage.removeItem('campusride_pin_unlocked_parent');
+          window.LoginPage.isPasswordMode = true;
 
-          window.showToast('Account created successfully!', 'success');
+          window.showToast('Parent account created successfully! Please sign in with your credentials.', 'success');
           window.location.hash = '#/';
           window.location.reload();
         } catch (err) {

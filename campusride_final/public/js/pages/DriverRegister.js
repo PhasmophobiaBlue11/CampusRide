@@ -271,14 +271,16 @@ class DriverRegisterPage {
             body: JSON.stringify({ fullName, username, phone, password, pin, vehicleNo, vehicleType })
           });
 
-          // Save device creation lock, quick PIN account, and token
+          // Save 1-account-per-device creation lock
           localStorage.setItem('campusride_account_created_driver', username);
-          localStorage.setItem('campusride_saved_account_driver', JSON.stringify({ username, role: 'driver', hasPin: true }));
-          localStorage.setItem('campusride_driver_token', res.token);
+          // Set role and ensure user lands directly on Login page
           localStorage.setItem('campusride_app_role', 'driver');
-          window.api.setToken(res.token);
+          localStorage.removeItem('campusride_saved_account_driver');
+          localStorage.removeItem('campusride_driver_token');
+          sessionStorage.removeItem('campusride_pin_unlocked_driver');
+          window.LoginPage.isPasswordMode = true;
 
-          window.showToast('Driver account created successfully!', 'success');
+          window.showToast('Driver account created successfully! Please sign in with your credentials.', 'success');
           window.location.hash = '#/';
           window.location.reload();
         } catch (err) {

@@ -8,7 +8,271 @@
 
 class LoginPage {
   static isPasswordMode = false;
+  static isResetPinMode = false;
   static pendingVerification = null;
+  static _keypadListener = null;
+  static _audioCtx = null;
+
+  // Render on-screen tactile keypad & 4 security indicator dots
+  static renderKeypad(formId, role, isDoubleSec = false) {
+    const roleClass = `role-${role || 'staff'}`;
+    const prefix = isDoubleSec ? 'double-sec' : 'quick-pin';
+    return `
+      <div class="pin-keypad-wrapper ${roleClass} my-1" data-target-form="${formId}">
+        <input type="hidden" id="${prefix}-pin-input" name="pin" value="" />
+
+        <!-- 4 Tactile Security Indicator Dots -->
+        <div class="pin-display-wrapper">
+          <div id="${prefix}-dots" class="pin-dots-container" aria-label="PIN security indicator dots">
+            <div class="pin-dot" data-index="0"></div>
+            <div class="pin-dot" data-index="1"></div>
+            <div class="pin-dot" data-index="2"></div>
+            <div class="pin-dot" data-index="3"></div>
+          </div>
+          <span class="text-[11px] text-slate-400 dark:text-slate-500 mt-2 font-medium">
+            Tap buttons below to enter 4-digit PIN
+          </span>
+        </div>
+
+        <!-- 3x4 Animated Dial Keypad -->
+        <div class="pin-keypad-grid" id="${prefix}-keypad">
+          <button type="button" class="pin-key-btn" data-key="1">
+            <span class="pin-key-num">1</span>
+            <span class="pin-key-subtext">&nbsp;</span>
+          </button>
+          <button type="button" class="pin-key-btn" data-key="2">
+            <span class="pin-key-num">2</span>
+            <span class="pin-key-subtext">ABC</span>
+          </button>
+          <button type="button" class="pin-key-btn" data-key="3">
+            <span class="pin-key-num">3</span>
+            <span class="pin-key-subtext">DEF</span>
+          </button>
+
+          <button type="button" class="pin-key-btn" data-key="4">
+            <span class="pin-key-num">4</span>
+            <span class="pin-key-subtext">GHI</span>
+          </button>
+          <button type="button" class="pin-key-btn" data-key="5">
+            <span class="pin-key-num">5</span>
+            <span class="pin-key-subtext">JKL</span>
+          </button>
+          <button type="button" class="pin-key-btn" data-key="6">
+            <span class="pin-key-num">6</span>
+            <span class="pin-key-subtext">MNO</span>
+          </button>
+
+          <button type="button" class="pin-key-btn" data-key="7">
+            <span class="pin-key-num">7</span>
+            <span class="pin-key-subtext">PQRS</span>
+          </button>
+          <button type="button" class="pin-key-btn" data-key="8">
+            <span class="pin-key-num">8</span>
+            <span class="pin-key-subtext">TUV</span>
+          </button>
+          <button type="button" class="pin-key-btn" data-key="9">
+            <span class="pin-key-num">9</span>
+            <span class="pin-key-subtext">WXYZ</span>
+          </button>
+
+          <!-- Bottom Row: Peek Toggle, 0, Backspace -->
+          <button type="button" class="pin-key-btn pin-key-action" data-action="peek" id="${prefix}-peek-btn" title="Peek PIN digits">
+            <span class="text-xl" id="${prefix}-peek-icon">👁️</span>
+            <span class="text-[8px] font-bold uppercase tracking-wider block mt-0.5 text-slate-400" id="${prefix}-peek-text">View</span>
+          </button>
+          <button type="button" class="pin-key-btn" data-key="0">
+            <span class="pin-key-num">0</span>
+            <span class="pin-key-subtext">+</span>
+          </button>
+          <button type="button" class="pin-key-btn pin-key-action" data-action="backspace" id="${prefix}-del-btn" title="Backspace">
+            <span class="text-xl">⌫</span>
+            <span class="text-[8px] font-bold uppercase tracking-wider block mt-0.5 text-slate-400">Del</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  // Keypad Controller: Manages state, animations, haptics, peek, backspace & auto-submit
+  static setupKeypadController({
+    keypadId,
+    dotsContainerId,
+    hiddenInputId,
+    onAutoSubmit
+  }) {
+    const keypadEl = document.getElementById(keypadId);
+    const dotsContainer = document.getElementById(dotsContainerId);
+    const hiddenInput = document.getElementById(hiddenInputId);
+    if (!keypadEl || !dotsContainer) return null;
+
+    let currentPin = '';
+    let isPeek = false;
+
+    // Soft haptic feedback
+    const triggerHaptic = (ms = 18) => {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate(ms); } catch (_) {}
+      }
+    };
+
+    // Soft acoustic tap sound synthesizer
+    const playClickSound = () => {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        if (!LoginPage._audioCtx) LoginPage._audioCtx = new AudioCtx();
+        if (LoginPage._audioCtx.state === 'suspended') LoginPage._audioCtx.resume();
+        const osc = LoginPage._audioCtx.createOscillator();
+        const gain = LoginPage._audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(520, LoginPage._audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(140, LoginPage._audioCtx.currentTime + 0.035);
+        gain.gain.setValueAtTime(0.06, LoginPage._audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, LoginPage._audioCtx.currentTime + 0.035);
+        osc.connect(gain);
+        gain.connect(LoginPage._audioCtx.destination);
+        osc.start();
+        osc.stop(LoginPage._audioCtx.currentTime + 0.035);
+      } catch (_) {}
+    };
+
+    const updateDots = () => {
+      const dots = dotsContainer.querySelectorAll('.pin-dot');
+      dots.forEach((dot, idx) => {
+        if (idx < currentPin.length) {
+          dot.classList.add('filled');
+          if (isPeek) {
+            dot.classList.add('peek');
+            dot.textContent = currentPin[idx];
+          } else {
+            dot.classList.remove('peek');
+            dot.textContent = '●';
+          }
+        } else {
+          dot.classList.remove('filled', 'peek');
+          dot.textContent = '';
+        }
+      });
+      if (hiddenInput) {
+        hiddenInput.value = currentPin;
+      }
+    };
+
+    const addDigit = (digit) => {
+      if (currentPin.length >= 4) return;
+      currentPin += digit;
+      triggerHaptic(18);
+      playClickSound();
+      updateDots();
+
+      if (currentPin.length === 4 && typeof onAutoSubmit === 'function') {
+        // Pause 130ms so the 4th filled dot is seen before auto-submitting
+        setTimeout(() => {
+          onAutoSubmit(currentPin);
+        }, 130);
+      }
+    };
+
+    const removeDigit = () => {
+      if (currentPin.length === 0) return;
+      currentPin = currentPin.slice(0, -1);
+      triggerHaptic(14);
+      playClickSound();
+      updateDots();
+    };
+
+    const togglePeek = () => {
+      isPeek = !isPeek;
+      triggerHaptic(15);
+      playClickSound();
+      const peekIcon = keypadEl.querySelector('[id$="-peek-icon"]');
+      const peekText = keypadEl.querySelector('[id$="-peek-text"]');
+      if (peekIcon) peekIcon.textContent = isPeek ? '🙈' : '👁️';
+      if (peekText) peekText.textContent = isPeek ? 'Hide' : 'View';
+      updateDots();
+    };
+
+    const triggerErrorShake = () => {
+      dotsContainer.classList.add('shake');
+      triggerHaptic([40, 60, 40]);
+      setTimeout(() => {
+        dotsContainer.classList.remove('shake');
+        currentPin = '';
+        updateDots();
+      }, 450);
+    };
+
+    // Button tactile click handlers
+    const buttons = keypadEl.querySelectorAll('.pin-key-btn');
+    buttons.forEach(btn => {
+      const animatePress = () => {
+        btn.classList.add('is-active');
+        setTimeout(() => btn.classList.remove('is-active'), 120);
+      };
+
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        animatePress();
+        const key = btn.getAttribute('data-key');
+        const action = btn.getAttribute('data-action');
+
+        if (key !== null) {
+          addDigit(key);
+        } else if (action === 'backspace') {
+          removeDigit();
+        } else if (action === 'peek') {
+          togglePeek();
+        }
+      });
+    });
+
+    // Desktop physical keyboard support
+    if (LoginPage._keypadListener) {
+      window.removeEventListener('keydown', LoginPage._keypadListener);
+      LoginPage._keypadListener = null;
+    }
+
+    const handleKeyDown = (e) => {
+      if (!document.body.contains(keypadEl)) {
+        window.removeEventListener('keydown', handleKeyDown);
+        LoginPage._keypadListener = null;
+        return;
+      }
+      if (e.key >= '0' && e.key <= '9') {
+        const btn = keypadEl.querySelector(`button[data-key="${e.key}"]`);
+        if (btn) {
+          btn.classList.add('is-active');
+          setTimeout(() => btn.classList.remove('is-active'), 120);
+        }
+        addDigit(e.key);
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        const btn = keypadEl.querySelector('button[data-action="backspace"]');
+        if (btn) {
+          btn.classList.add('is-active');
+          setTimeout(() => btn.classList.remove('is-active'), 120);
+        }
+        removeDigit();
+      } else if (e.key === 'Enter') {
+        if (currentPin.length === 4 && typeof onAutoSubmit === 'function') {
+          onAutoSubmit(currentPin);
+        }
+      }
+    };
+    LoginPage._keypadListener = handleKeyDown;
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Initial render
+    updateDots();
+
+    return {
+      getPin: () => currentPin,
+      clearPin: () => {
+        currentPin = '';
+        updateDots();
+      },
+      triggerError: triggerErrorShake
+    };
+  }
 
   static render(role = 'staff') {
     const isDriver = role === 'driver';
@@ -76,19 +340,9 @@ class LoginPage {
               </p>
             </div>
 
-            <!-- PIN Form -->
+            <!-- PIN Keypad Form -->
             <form id="double-sec-form" class="space-y-4" autocomplete="off">
-              <div>
-                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Enter 4-Digit Security PIN
-                </label>
-                <div class="relative flex items-center justify-center w-52 mx-auto">
-                  <input type="password" id="double-sec-pin-input" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" autofocus class="cr-input font-mono font-black text-2xl tracking-widest text-center py-3 pr-11 w-full shadow-inner" placeholder="••••" autocomplete="one-time-code" />
-                  <button type="button" id="toggle-double-sec-pin" class="absolute right-2.5 p-1 text-base text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none" title="Toggle PIN visibility">
-                    👁️
-                  </button>
-                </div>
-              </div>
+              ${LoginPage.renderKeypad('double-sec-form', pending.role || role, true)}
 
               <button type="submit" id="double-sec-submit-btn" class="cr-btn ${btnClass} w-full py-2.5 font-bold cursor-pointer shadow-md transition">
                 🔓 Verify PIN & Complete Sign In
@@ -125,6 +379,89 @@ class LoginPage {
     }
 
     // -----------------------------------------------------------
+    // SCREEN 1A: RESET SECURITY PIN SCREEN (Forgot PIN)
+    // -----------------------------------------------------------
+    if (LoginPage.isResetPinMode && savedAccount && savedAccount.username) {
+      return `
+        <div class="min-h-screen flex items-center justify-center p-4 relative z-10">
+          <div class="cr-card w-full max-w-md p-6 sm:p-8 animate-fade-in-up text-center space-y-6">
+            
+            <!-- Brand / Security Header -->
+            <div>
+              <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-tr ${portalAccent} flex items-center justify-center text-white shadow-xl text-3xl">
+                🔐
+              </div>
+              <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Reset Security PIN</h1>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Enter your account password to verify your identity and set a new 4-digit PIN.
+              </p>
+            </div>
+
+            <!-- Verified Account Information Card -->
+            <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
+              <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Connected Account</span>
+              <div class="font-mono font-black text-base text-blue-600 dark:text-blue-400 mt-0.5">
+                @${savedAccount.username}
+              </div>
+            </div>
+
+            <!-- Reset PIN Form -->
+            <form id="reset-pin-form" data-username="${savedAccount.username}" data-role="${role}" class="space-y-4 text-left" autocomplete="off">
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Account Password
+                </label>
+                <div class="relative flex items-center">
+                  <input type="password" id="reset-pin-password" required class="cr-input pr-11" placeholder="Enter your account password" autocomplete="current-password" />
+                  <button type="button" id="toggle-reset-password" class="absolute right-2.5 p-1 text-base text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none" title="Toggle password visibility">
+                    👁️
+                  </button>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    New 4-Digit PIN
+                  </label>
+                  <div class="relative flex items-center">
+                    <input type="password" id="reset-pin-new" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" class="cr-input font-mono font-black text-xl tracking-widest text-center pr-10" placeholder="••••" autocomplete="off" />
+                    <button type="button" id="toggle-reset-pin-new" class="absolute right-2 p-1 text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none" title="Toggle PIN visibility">
+                      👁️
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Confirm PIN
+                  </label>
+                  <div class="relative flex items-center">
+                    <input type="password" id="reset-pin-confirm" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" class="cr-input font-mono font-black text-xl tracking-widest text-center pr-10" placeholder="••••" autocomplete="off" />
+                    <button type="button" id="toggle-reset-pin-confirm" class="absolute right-2 p-1 text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none" title="Toggle PIN visibility">
+                      👁️
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" id="reset-pin-submit-btn" class="cr-btn ${btnClass} w-full py-2.5 font-bold cursor-pointer shadow-md transition">
+                Reset PIN & Sign In
+              </button>
+            </form>
+
+            <!-- Cancel Button -->
+            <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button type="button" id="cancel-reset-pin-btn" class="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-white hover:underline cursor-pointer">
+                ← Back to PIN Unlock
+              </button>
+            </div>
+
+          </div>
+        </div>
+      `;
+    }
+
+    // -----------------------------------------------------------
     // SCREEN 1: 4-DIGIT PIN QUICK UNLOCK SCREEN (Returning Device)
     // -----------------------------------------------------------
     if (savedAccount && savedAccount.username && !LoginPage.isPasswordMode) {
@@ -149,29 +486,19 @@ class LoginPage {
               </div>
             </div>
 
-            <!-- PIN Form -->
+            <!-- PIN Keypad Form -->
             <form id="pin-login-form" data-username="${savedAccount.username}" data-role="${role}" class="space-y-4" autocomplete="off">
-              <div>
-                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Enter 4-Digit Security PIN
-                </label>
-                <div class="relative flex items-center justify-center w-52 mx-auto">
-                  <input type="password" id="pin-login-input" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" autofocus class="cr-input font-mono font-black text-2xl tracking-widest text-center py-3 pr-11 w-full shadow-inner" placeholder="••••" autocomplete="one-time-code" />
-                  <button type="button" id="toggle-quick-pin" class="absolute right-2.5 p-1 text-base text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer select-none" title="Toggle PIN visibility">
-                    👁️
-                  </button>
-                </div>
-              </div>
+              ${LoginPage.renderKeypad('pin-login-form', role, false)}
 
               <button type="submit" id="pin-unlock-submit-btn" class="cr-btn ${btnClass} w-full py-2.5 font-bold cursor-pointer shadow-md transition">
                 🔓 Unlock App
               </button>
             </form>
 
-            <!-- Switch to full login option -->
+            <!-- Forgot PIN option -->
             <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
-              <button type="button" id="switch-to-password-btn" class="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-white hover:underline cursor-pointer">
-                🔑 Sign in with Password / Switch Account
+              <button type="button" id="forgot-pin-btn" class="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
+                Forgot PIN?
               </button>
             </div>
 
@@ -269,26 +596,34 @@ class LoginPage {
   }
 
   static attachEvents() {
-    // 0. Double Security 4-Digit PIN Form Handler (Step 2 of Login)
-    const doubleSecForm = document.getElementById('double-sec-form');
-    if (doubleSecForm) {
-      const pinInput = document.getElementById('double-sec-pin-input');
-      const submitBtn = document.getElementById('double-sec-submit-btn');
-      const cancelBtn = document.getElementById('cancel-double-sec-btn');
+    // 0A. Reset Security PIN Form Handler (Forgot PIN)
+    const resetPinForm = document.getElementById('reset-pin-form');
+    if (resetPinForm) {
+      const passInput = document.getElementById('reset-pin-password');
+      const newPinInput = document.getElementById('reset-pin-new');
+      const confirmPinInput = document.getElementById('reset-pin-confirm');
+      const submitBtn = document.getElementById('reset-pin-submit-btn');
+      const cancelBtn = document.getElementById('cancel-reset-pin-btn');
 
-      const toggleSecPinBtn = document.getElementById('toggle-double-sec-pin');
-      if (toggleSecPinBtn && pinInput) {
-        toggleSecPinBtn.onclick = () => {
-          const isPass = pinInput.type === 'password';
-          pinInput.type = isPass ? 'text' : 'password';
-          toggleSecPinBtn.textContent = isPass ? '🙈' : '👁️';
-        };
-      }
+      // Eye toggles for Reset PIN form
+      const setupToggle = (btnId, inputEl) => {
+        const btn = document.getElementById(btnId);
+        if (btn && inputEl) {
+          btn.onclick = () => {
+            const isPass = inputEl.type === 'password';
+            inputEl.type = isPass ? 'text' : 'password';
+            btn.textContent = isPass ? '🙈' : '👁️';
+          };
+        }
+      };
+      setupToggle('toggle-reset-password', passInput);
+      setupToggle('toggle-reset-pin-new', newPinInput);
+      setupToggle('toggle-reset-pin-confirm', confirmPinInput);
 
       if (cancelBtn) {
         cancelBtn.onclick = () => {
-          const role = LoginPage.pendingVerification?.role || 'staff';
-          LoginPage.pendingVerification = null;
+          LoginPage.isResetPinMode = false;
+          const role = resetPinForm.getAttribute('data-role');
           const appEl = document.getElementById('app');
           if (appEl) {
             appEl.innerHTML = LoginPage.render(role);
@@ -297,13 +632,75 @@ class LoginPage {
         };
       }
 
-      doubleSecForm.onsubmit = async (e) => {
+      resetPinForm.onsubmit = async (e) => {
         e.preventDefault();
-        const pin = pinInput.value.trim();
+        const username = resetPinForm.getAttribute('data-username');
+        const role = resetPinForm.getAttribute('data-role');
+        const password = passInput.value;
+        const newPin = newPinInput.value.trim();
+        const confirmPin = confirmPinInput.value.trim();
+
+        if (!password) {
+          return window.showToast('Please enter your account password', 'error');
+        }
+        if (!newPin || !/^\d{4}$/.test(newPin)) {
+          return window.showToast('New PIN must be exactly 4 numeric digits', 'error');
+        }
+        if (newPin !== confirmPin) {
+          return window.showToast('New PIN and Confirm PIN do not match', 'error');
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Verifying & resetting PIN...';
+
+        try {
+          const res = await window.api.request('/api/auth/reset-pin', {
+            method: 'POST',
+            body: JSON.stringify({ username, password, newPin, required_role: role })
+          });
+
+          window.showToast('Security PIN reset successfully!', 'success');
+
+          // Save account for quick 4-digit PIN unlock
+          localStorage.setItem(`campusride_saved_account_${role}`, JSON.stringify({
+            username: res.user?.username || username,
+            role,
+            hasPin: true
+          }));
+          localStorage.setItem(`campusride_${role}_token`, res.token);
+          sessionStorage.setItem(`campusride_pin_unlocked_${role}`, 'true');
+          window.api.setToken(res.token);
+
+          LoginPage.isResetPinMode = false;
+          LoginPage.isPasswordMode = false;
+          localStorage.setItem('campusride_app_role', role);
+
+          window.location.hash = '#/';
+          window.location.reload();
+        } catch (err) {
+          window.showToast(err.message, 'error');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Reset PIN & Sign In';
+        }
+      };
+      return;
+    }
+
+    // 0. Double Security 4-Digit PIN Form Handler (Step 2 of Login)
+    const doubleSecForm = document.getElementById('double-sec-form');
+    if (doubleSecForm) {
+      const submitBtn = document.getElementById('double-sec-submit-btn');
+      const cancelBtn = document.getElementById('cancel-double-sec-btn');
+
+      let keypadCtrl = null;
+
+      const doSubmit = async (pinValue) => {
         const pending = LoginPage.pendingVerification;
         if (!pending) return;
 
+        const pin = pinValue || keypadCtrl?.getPin() || '';
         if (!pin || pin.length !== 4) {
+          if (keypadCtrl) keypadCtrl.triggerError();
           return window.showToast('Please enter your 4-digit PIN', 'error');
         }
 
@@ -331,9 +728,32 @@ class LoginPage {
           window.showToast(err.message, 'error');
           submitBtn.disabled = false;
           submitBtn.textContent = '🔓 Verify PIN & Complete Sign In';
-          pinInput.value = '';
-          pinInput.focus();
+          if (keypadCtrl) keypadCtrl.triggerError();
         }
+      };
+
+      keypadCtrl = LoginPage.setupKeypadController({
+        keypadId: 'double-sec-keypad',
+        dotsContainerId: 'double-sec-dots',
+        hiddenInputId: 'double-sec-pin-input',
+        onAutoSubmit: (pin) => doSubmit(pin)
+      });
+
+      if (cancelBtn) {
+        cancelBtn.onclick = () => {
+          const role = LoginPage.pendingVerification?.role || 'staff';
+          LoginPage.pendingVerification = null;
+          const appEl = document.getElementById('app');
+          if (appEl) {
+            appEl.innerHTML = LoginPage.render(role);
+            LoginPage.attachEvents();
+          }
+        };
+      }
+
+      doubleSecForm.onsubmit = async (e) => {
+        e.preventDefault();
+        await doSubmit();
       };
       return;
     }
@@ -341,16 +761,17 @@ class LoginPage {
     // 1. PIN Quick Unlock Form Handler (Returning Device)
     const pinForm = document.getElementById('pin-login-form');
     if (pinForm) {
-      const pinInput = document.getElementById('pin-login-input');
       const submitBtn = document.getElementById('pin-unlock-submit-btn');
+      const username = pinForm.getAttribute('data-username');
+      const role = pinForm.getAttribute('data-role');
 
-      pinForm.onsubmit = async (e) => {
-        e.preventDefault();
-        const pin = pinInput.value.trim();
-        const username = pinForm.getAttribute('data-username');
-        const role = pinForm.getAttribute('data-role');
+      let keypadCtrl = null;
+
+      const doUnlock = async (pinValue) => {
+        const pin = pinValue || keypadCtrl?.getPin() || '';
 
         if (!pin || pin.length !== 4) {
+          if (keypadCtrl) keypadCtrl.triggerError();
           return window.showToast('Please enter your 4-digit PIN', 'error');
         }
 
@@ -372,31 +793,27 @@ class LoginPage {
           window.showToast(err.message, 'error');
           submitBtn.disabled = false;
           submitBtn.textContent = '🔓 Unlock App';
-          pinInput.value = '';
-          pinInput.focus();
+          if (keypadCtrl) keypadCtrl.triggerError();
         }
       };
 
-      const toggleQuickPinBtn = document.getElementById('toggle-quick-pin');
-      if (toggleQuickPinBtn && pinInput) {
-        toggleQuickPinBtn.onclick = () => {
-          const isPass = pinInput.type === 'password';
-          pinInput.type = isPass ? 'text' : 'password';
-          toggleQuickPinBtn.textContent = isPass ? '🙈' : '👁️';
-        };
-      }
+      keypadCtrl = LoginPage.setupKeypadController({
+        keypadId: 'quick-pin-keypad',
+        dotsContainerId: 'quick-pin-dots',
+        hiddenInputId: 'quick-pin-pin-input',
+        onAutoSubmit: (pin) => doUnlock(pin)
+      });
 
-      // Switch to password mode button
-      const switchBtn = document.getElementById('switch-to-password-btn');
-      if (switchBtn) {
-        switchBtn.onclick = () => {
-          LoginPage.isPasswordMode = true;
-          LoginPage.pendingVerification = null;
-          const role = pinForm.getAttribute('data-role');
-          // Purge saved account and token so user has a fresh, standard Login screen
-          localStorage.removeItem(`campusride_saved_account_${role}`);
-          localStorage.removeItem(`campusride_${role}_token`);
-          sessionStorage.removeItem(`campusride_pin_unlocked_${role}`);
+      pinForm.onsubmit = async (e) => {
+        e.preventDefault();
+        await doUnlock();
+      };
+
+      // Forgot PIN button handler
+      const forgotPinBtn = document.getElementById('forgot-pin-btn');
+      if (forgotPinBtn) {
+        forgotPinBtn.onclick = () => {
+          LoginPage.isResetPinMode = true;
           const appEl = document.getElementById('app');
           if (appEl) {
             appEl.innerHTML = LoginPage.render(role);
