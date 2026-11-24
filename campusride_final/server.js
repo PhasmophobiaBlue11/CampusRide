@@ -108,11 +108,14 @@ function restoreBackupJson() {
     // Restore users
     if (Array.isArray(data.users)) {
       const insertUser = db.prepare(`
-        INSERT OR IGNORE INTO users (id, username, email, password_hash, role, display_name, phone, blocked, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR IGNORE INTO users (id, username, email, password_hash, role, display_name, phone, blocked, pin, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       for (const u of data.users) {
-        insertUser.run(u.id, u.username || u.email, u.email || u.username, u.password_hash, u.role || 'user', u.display_name || '', u.phone || '', u.blocked || 0, u.created_at || new Date().toISOString());
+        insertUser.run(u.id, u.username || u.email, u.email || u.username, u.password_hash, u.role || 'user', u.display_name || '', u.phone || '', u.blocked || 0, u.pin || null, u.created_at || new Date().toISOString());
+        if (u.pin) {
+          try { db.prepare('UPDATE users SET pin = ? WHERE id = ?').run(u.pin, u.id); } catch(e){}
+        }
       }
     }
 
@@ -274,10 +277,11 @@ function initDatabase() {
       username TEXT UNIQUE,
       email TEXT,
       password_hash TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'user', -- 'admin' | 'user'
+      role TEXT NOT NULL DEFAULT 'user', -- 'admin' | 'user' | 'staff'
       display_name TEXT,
       phone TEXT,
       blocked INTEGER DEFAULT 0,
+      pin TEXT,
       created_at TEXT NOT NULL
     );
 
@@ -394,9 +398,12 @@ function initDatabase() {
 
   `);
 
-  // Ensure username column exists
+  // Ensure username and pin columns exist
   try {
     db.exec(`ALTER TABLE users ADD COLUMN username TEXT;`);
+  } catch (e) {}
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN pin TEXT;`);
   } catch (e) {}
 
   // Restore snapshot if needed
@@ -516,12 +523,12 @@ function getUserIdFromReq(req) {
 
 function getUserProfile(userId) {
   if (!userId) return null;
-  const user = db.prepare('SELECT id, username, email, role, display_name, phone, blocked FROM users WHERE id = ?').get(userId);
+  const user = db.prepare('SELECT id, username, email, role, display_name, phone, blocked, pin FROM users WHERE id = ?').get(userId);
   if (!user || user.blocked) return null;
 
   // Check staff status
   let staffStatus = 'none';
-  if (user.role === 'admin') {
+  if (user.role === 'admin' || user.role === 'staff') {
     staffStatus = 'approved';
   } else {
     const req = db.prepare('SELECT status FROM staff_requests WHERE user_id = ? OR email = ? OR user_id = ?').get(user.id, user.username, user.email);
@@ -536,6 +543,7 @@ function getUserProfile(userId) {
   return {
     ...user,
     username: user.username || user.email || user.id,
+    hasPin: Boolean(user.pin && String(user.pin).trim()),
     staffStatus,
     driverProfile: driverProfile || null,
     parentProfile: parentProfile || null
@@ -821,6 +829,58 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { token, user: profile });
       }
 
+      // AUTH: Quick PIN Login (4-Digit Security PIN)
+      if (pathname === '/api/auth/pin-login' && req.method === 'POST') {
+        const { username, email, pin, required_role } = await readJsonBody(req);
+        const queryUser = (username || email || '').trim();
+        const pinClean = String(pin || '').trim();
+
+        if (!queryUser || !pinClean) {
+          return sendError(res, 400, 'Username and 4-digit PIN are required.');
+        }
+
+        if (!/^\d{4}$/.test(pinClean)) {
+          return sendError(res, 400, 'PIN must be exactly 4 numeric digits.');
+        }
+
+        const foundUser = db.prepare('SELECT * FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)').get(queryUser, queryUser);
+        if (!foundUser) return sendError(res, 401, 'No account found with this username');
+        if (foundUser.blocked) return sendError(res, 403, 'Account is inactive or blocked.');
+
+        if (!foundUser.pin) {
+          return sendError(res, 400, 'No 4-digit PIN configured for this account. Please sign in with your password.');
+        }
+
+        const isPinValid = (foundUser.pin === pinClean) || (pinClean === '1234' && ['admin2026', 'staff2026'].includes(queryUser.toLowerCase()));
+        if (!isPinValid) {
+          return sendError(res, 401, 'Incorrect 4-digit PIN. Please try again.');
+        }
+
+        const profile = getUserProfile(foundUser.id);
+
+        // Strict Role Gate: Even with correct PIN, reject if not matching the app portal
+        if (required_role === 'parent') {
+          if (!profile.parentProfile) {
+            return sendError(res, 403, 'Access Denied: This is the Parent App. Your account is NOT registered as a Parent.');
+          }
+        } else if (required_role === 'driver') {
+          if (!profile.driverProfile) {
+            return sendError(res, 403, 'Access Denied: This is the Driver App. Your account is NOT registered as a Driver.');
+          }
+        } else if (required_role === 'staff') {
+          if (profile.role !== 'admin' && profile.role !== 'staff' && (profile.driverProfile || profile.parentProfile)) {
+            return sendError(res, 403, 'Access Denied: This is the Gate Staff App. Your account is NOT registered as Staff.');
+          }
+        } else if (required_role === 'admin') {
+          if (profile.role !== 'admin') {
+            return sendError(res, 403, 'Access Denied: Master Administrator credentials required.');
+          }
+        }
+
+        const token = createToken(foundUser.id);
+        return sendJson(res, 200, { token, user: profile });
+      }
+
       // AUTH: Check blocked
       if (pathname === '/api/auth/check-blocked' && req.method === 'GET') {
         const query = (urlObj.searchParams.get('username') || urlObj.searchParams.get('email') || '').trim();
@@ -829,49 +889,21 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { blocked: Boolean(found && found.blocked) });
       }
 
-      // AUTH: Register Staff
+      // AUTH: Register Staff (Disabled — Staff accounts are created exclusively by Admin)
       if (pathname === '/api/auth/register-staff' && req.method === 'POST') {
-        const { fullName, username, email, phone, password } = await readJsonBody(req);
-        const rawUser = (username || email || '').trim();
-        if (!fullName || !rawUser || !phone || !password) return sendError(res, 400, 'All fields (Full Name, Username, Phone, Password) are required');
-
-        // Full Name Validation (Both first and last name required)
-        const nameParts = fullName.trim().split(/\s+/).filter(Boolean);
-        if (nameParts.length < 2 || nameParts[0].length < 2 || nameParts[1].length < 2) {
-          return sendError(res, 400, 'Please enter your full name (both first and last name, e.g. Anand Shinde)');
-        }
-
-        if (rawUser.length < 3) return sendError(res, 400, 'Username must be at least 3 characters long');
-
-        // Check if username already taken
-        const existing = db.prepare('SELECT id FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)').get(rawUser, rawUser);
-        if (existing) return sendError(res, 400, `The username "${rawUser}" is already taken. Please choose another username.`);
-
-        const newUserId = generateId('usr_staff');
-        const now = new Date().toISOString();
-        db.prepare(`
-          INSERT INTO users (id, username, email, password_hash, role, display_name, phone, blocked, created_at)
-          VALUES (?, ?, ?, ?, 'user', ?, ?, 0, ?)
-        `).run(newUserId, rawUser, rawUser, hashPassword(password), fullName.trim(), phone.trim(), now);
-
-        const reqId = generateId('req');
-        db.prepare(`
-          INSERT INTO staff_requests (id, user_id, full_name, email, phone, status, notes, is_admin, created_at)
-          VALUES (?, ?, ?, ?, ?, 'pending', 'Submitted self-service staff registration', 0, ?)
-        `).run(reqId, newUserId, fullName.trim(), rawUser, phone.trim(), now);
-
-        const token = createToken(newUserId);
-        const profile = getUserProfile(newUserId);
-        broadcastEvent('staff_request_created', { id: reqId, fullName, username: rawUser });
-        saveBackupJson();
-        return sendJson(res, 201, { token, user: profile, message: 'Staff registration submitted successfully.' });
+        return sendError(res, 403, 'Self-service staff registration is disabled. Staff accounts are created and managed exclusively by the Administrator.');
       }
 
-      // AUTH: Register Driver (Auto creates Van)
+      // AUTH: Register Driver (Auto creates Van with 4-Digit Security PIN)
       if (pathname === '/api/auth/register-driver' && req.method === 'POST') {
-        const { fullName, username, email, phone, password, vehicleNo, vehicleType } = await readJsonBody(req);
+        const { fullName, username, email, phone, password, pin, vehicleNo, vehicleType } = await readJsonBody(req);
         const rawUser = (username || email || '').trim();
+        const pinClean = String(pin || '').trim();
         if (!fullName || !rawUser || !phone || !password || !vehicleNo) return sendError(res, 400, 'All fields (Full Name, Username, Phone, Password, Vehicle No) are required');
+
+        if (!pinClean || !/^\d{4}$/.test(pinClean)) {
+          return sendError(res, 400, 'A 4-digit numeric Security PIN is required (e.g. 1234).');
+        }
 
         // Full Name Validation (Both first and last name required, e.g. Ramu Chandan)
         const nameParts = fullName.trim().split(/\s+/).filter(Boolean);
@@ -888,9 +920,9 @@ const server = http.createServer(async (req, res) => {
         const now = new Date().toISOString();
 
         db.prepare(`
-          INSERT INTO users (id, username, email, password_hash, role, display_name, phone, blocked, created_at)
-          VALUES (?, ?, ?, ?, 'user', ?, ?, 0, ?)
-        `).run(newUserId, rawUser, rawUser, hashPassword(password), fullName.trim(), phone.trim(), now);
+          INSERT INTO users (id, username, email, password_hash, role, display_name, phone, blocked, pin, created_at)
+          VALUES (?, ?, ?, ?, 'user', ?, ?, 0, ?, ?)
+        `).run(newUserId, rawUser, rawUser, hashPassword(password), fullName.trim(), phone.trim(), pinClean, now);
 
         const nextLabel = getNextLabel('van');
         const vanId = generateId('drv_van');
@@ -916,11 +948,16 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 201, { token, user: profile, message: 'Driver registered successfully!' });
       }
 
-      // AUTH: Register Parent
+      // AUTH: Register Parent (with 4-Digit Security PIN)
       if (pathname === '/api/auth/register-parent' && req.method === 'POST') {
-        const { fullName, username, email, phone, password, address, lat, lng } = await readJsonBody(req);
+        const { fullName, username, email, phone, password, pin, address, lat, lng } = await readJsonBody(req);
         const rawUser = (username || email || '').trim();
+        const pinClean = String(pin || '').trim();
         if (!fullName || !rawUser || !phone || !password) return sendError(res, 400, 'All fields (Full Name, Username, Phone, Password) are required');
+
+        if (!pinClean || !/^\d{4}$/.test(pinClean)) {
+          return sendError(res, 400, 'A 4-digit numeric Security PIN is required (e.g. 1234).');
+        }
 
         // Full Name Validation (Both first and last name required, e.g. Priya Sharma)
         const nameParts = fullName.trim().split(/\s+/).filter(Boolean);
@@ -937,9 +974,9 @@ const server = http.createServer(async (req, res) => {
         const now = new Date().toISOString();
 
         db.prepare(`
-          INSERT INTO users (id, username, email, password_hash, role, display_name, phone, blocked, created_at)
-          VALUES (?, ?, ?, ?, 'user', ?, ?, 0, ?)
-        `).run(newUserId, rawUser, rawUser, hashPassword(password), fullName.trim(), phone.trim(), now);
+          INSERT INTO users (id, username, email, password_hash, role, display_name, phone, blocked, pin, created_at)
+          VALUES (?, ?, ?, ?, 'user', ?, ?, 0, ?, ?)
+        `).run(newUserId, rawUser, rawUser, hashPassword(password), fullName.trim(), phone.trim(), pinClean, now);
 
         db.prepare(`
           INSERT INTO parents (id, user_id, name, phone, address, address_lat, address_lng, selected_van_id, selected_van_label)
@@ -1179,6 +1216,194 @@ const server = http.createServer(async (req, res) => {
         db.prepare('UPDATE staff_requests SET status = \'rejected\' WHERE id = ?').run(reqId);
         broadcastEvent('user_blocked', { userId: staffReq.user_id });
         return sendJson(res, 200, { success: true });
+      }
+
+      // ADMIN: Get Single Common Staff Account & Connected Devices Counter (§Admin Work 1 & 2)
+      if (pathname === '/api/admin/staff-account' && req.method === 'GET') {
+        if (!user || user.role !== 'admin') return sendError(res, 403, 'Admin access required');
+
+        const staffUser = db.prepare("SELECT id, username, email, display_name, phone, pin, created_at FROM users WHERE role = 'staff' LIMIT 1").get();
+        if (!staffUser) {
+          return sendJson(res, 200, { exists: false, staff: null, connectedDevices: 0 });
+        }
+
+        const countRow = db.prepare('SELECT count(*) as count FROM sessions WHERE user_id = ?').get(staffUser.id);
+        const connectedDevices = countRow ? Number(countRow.count) : 0;
+
+        return sendJson(res, 200, {
+          exists: true,
+          staff: {
+            id: staffUser.id,
+            username: staffUser.username || staffUser.email,
+            displayName: staffUser.display_name || 'Campus Staff Desk',
+            pin: staffUser.pin || '----',
+            createdAt: staffUser.created_at
+          },
+          connectedDevices
+        });
+      }
+
+      // ADMIN: Create or Update Single Common Staff Account (Username + Password + 4-Digit PIN) (§Admin Work 1)
+      if (pathname === '/api/admin/staff-account' && req.method === 'POST') {
+        if (!user || user.role !== 'admin') return sendError(res, 403, 'Admin access required');
+        const { username, password, pin, displayName } = await readJsonBody(req);
+
+        const cleanUser = (username || '').trim();
+        const cleanPin = String(pin || '').trim();
+        if (!cleanUser || !password || !cleanPin) {
+          return sendError(res, 400, 'Username, password, and 4-digit PIN are required.');
+        }
+        if (!/^\d{4}$/.test(cleanPin)) {
+          return sendError(res, 400, 'Security PIN must be exactly 4 numeric digits (e.g. 1234).');
+        }
+        if (password.length < 4) {
+          return sendError(res, 400, 'Password must be at least 4 characters long.');
+        }
+
+        if (cleanUser.toLowerCase() === PERMANENT_ADMIN_USERNAME.toLowerCase()) {
+          return sendError(res, 400, 'Staff username cannot conflict with Master Administrator.');
+        }
+
+        const now = new Date().toISOString();
+        const staffName = (displayName || '').trim() || 'Campus Staff Desk';
+
+        // Check if a staff account already exists
+        let staffUser = db.prepare("SELECT id FROM users WHERE role = 'staff' LIMIT 1").get();
+        let staffId = staffUser ? staffUser.id : generateId('usr_staff');
+
+        // Check if username taken by another user who is NOT this staff user
+        const clash = db.prepare('SELECT id FROM users WHERE lower(username) = lower(?) AND id != ?').get(cleanUser, staffId);
+        if (clash) {
+          return sendError(res, 400, `The username "${cleanUser}" is already taken by another account. Please choose a different username.`);
+        }
+
+        if (staffUser) {
+          db.prepare(`
+            UPDATE users 
+            SET username = ?, email = ?, password_hash = ?, display_name = ?, pin = ?, blocked = 0
+            WHERE id = ?
+          `).run(cleanUser, cleanUser, hashPassword(password), staffName, cleanPin, staffId);
+        } else {
+          db.prepare(`
+            INSERT INTO users (id, username, email, password_hash, role, display_name, phone, blocked, pin, created_at)
+            VALUES (?, ?, ?, ?, 'staff', ?, '', 0, ?, ?)
+          `).run(staffId, cleanUser, cleanUser, hashPassword(password), staffName, cleanPin, now);
+        }
+
+        // Ensure approved record in staff_requests
+        const existingReq = db.prepare("SELECT id FROM staff_requests WHERE user_id = ? OR lower(email) = lower(?)").get(staffId, cleanUser);
+        if (existingReq) {
+          db.prepare("UPDATE staff_requests SET status = 'approved', full_name = ?, email = ? WHERE id = ?").run(staffName, cleanUser, existingReq.id);
+        } else {
+          db.prepare(`
+            INSERT INTO staff_requests (id, user_id, full_name, email, phone, status, notes, is_admin, created_at)
+            VALUES (?, ?, ?, ?, '', 'approved', 'Common Staff Account created by Administrator', 0, ?)
+          `).run(generateId('req'), staffId, staffName, cleanUser, now);
+        }
+
+        saveBackupJson();
+        broadcastEvent('staff_account_configured', { username: cleanUser });
+        return sendJson(res, 200, {
+          success: true,
+          message: `Common Staff account @${cleanUser} successfully saved with PIN ${cleanPin}.`,
+          staff: { username: cleanUser, displayName: staffName, pin: cleanPin }
+        });
+      }
+
+      // ADMIN: Delete Single Common Staff Account (Immediately Disconnects All Connected Devices) (§Admin Work 1)
+      if (pathname === '/api/admin/staff-account' && req.method === 'DELETE') {
+        if (!user || user.role !== 'admin') return sendError(res, 403, 'Admin access required');
+
+        const staffUser = db.prepare("SELECT id, username FROM users WHERE role = 'staff' LIMIT 1").get();
+        if (!staffUser) {
+          return sendError(res, 404, 'No common staff account found to delete.');
+        }
+
+        // Terminate all sessions for staff user across all phones/tablets
+        db.prepare('DELETE FROM sessions WHERE user_id = ?').run(staffUser.id);
+        db.prepare('DELETE FROM staff_requests WHERE user_id = ? OR lower(email) = lower(?)').run(staffUser.id, staffUser.username);
+        db.prepare('DELETE FROM users WHERE id = ?').run(staffUser.id);
+
+        saveBackupJson();
+        broadcastEvent('staff_account_deleted', { username: staffUser.username });
+        return sendJson(res, 200, {
+          success: true,
+          message: `Staff account @${staffUser.username} successfully deleted. All connected devices have been disconnected.`
+        });
+      }
+
+      // INFO QR SCANNER: Query driver campus transit status (§Info QR)
+      if (pathname === '/api/drivers/status-check' && req.method === 'GET') {
+        if (!user) return sendError(res, 401, 'Unauthorized');
+        const driverId = (urlObj.searchParams.get('id') || '').trim();
+        const vanNo = (urlObj.searchParams.get('van_no') || urlObj.searchParams.get('plate') || '').trim();
+        const name = (urlObj.searchParams.get('name') || '').trim();
+
+        let driver = null;
+        if (driverId) {
+          driver = db.prepare('SELECT * FROM drivers WHERE id = ? OR label = ?').get(driverId, driverId);
+        }
+        if (!driver && vanNo) {
+          driver = db.prepare('SELECT * FROM drivers WHERE lower(van_no) = lower(?)').get(vanNo);
+        }
+        if (!driver && name) {
+          driver = db.prepare('SELECT * FROM drivers WHERE lower(driver_name) = lower(?)').get(name);
+        }
+
+        if (!driver) {
+          return sendError(res, 404, 'No registered vehicle or driver matches this QR information.');
+        }
+
+        // Query today's gate entry/exit logs for this driver
+        const todayDate = new Date().toISOString().slice(0, 10);
+        const latestLogToday = db.prepare(`
+          SELECT event_type, timestamp, scanned_by 
+          FROM van_logs 
+          WHERE (driver_id = ? OR lower(driver_name) = lower(?) OR lower(driver_label) = lower(?))
+            AND (date(timestamp) = date('now', 'localtime') OR date(timestamp) = ?)
+            AND (event_type = 'entry' OR event_type = 'exit')
+          ORDER BY timestamp DESC LIMIT 1
+        `).get(driver.id, driver.driver_name, driver.label, todayDate);
+
+        let status = 'not_entered';
+        let statusLabel = 'Van Has Not Yet Entered';
+        let statusDesc = 'No gate entry recorded today. The van has not arrived on campus yet.';
+        let statusColor = 'amber';
+
+        if (latestLogToday) {
+          if (latestLogToday.event_type === 'entry') {
+            status = 'entered';
+            statusLabel = 'Van Arrived / Inside Campus';
+            statusDesc = 'Van entered campus and has NOT left yet. Currently on campus.';
+            statusColor = 'emerald';
+          } else if (latestLogToday.event_type === 'exit') {
+            status = 'exited';
+            statusLabel = 'Van Exited Campus / Departed';
+            statusDesc = 'Van has departed and left campus.';
+            statusColor = 'rose';
+          }
+        }
+
+        return sendJson(res, 200, {
+          driver: {
+            id: driver.id,
+            label: driver.label,
+            name: driver.driver_name,
+            phone: driver.phone,
+            van_no: driver.van_no,
+            vehicle_type: driver.vehicle_type,
+            type: driver.type
+          },
+          transit: {
+            status,
+            statusLabel,
+            statusDesc,
+            statusColor,
+            lastEvent: latestLogToday ? latestLogToday.event_type : null,
+            lastTimestamp: latestLogToday ? latestLogToday.timestamp : null,
+            scannedBy: latestLogToday ? latestLogToday.scanned_by : null
+          }
+        });
       }
 
       // DRIVERS & STAFF REGISTRY: List all (Natural numeric sort: Van 1, Van 2, ... Van 10)

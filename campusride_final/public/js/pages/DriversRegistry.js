@@ -84,8 +84,11 @@ class DriversRegistryPage {
 
               <!-- Pass Actions -->
               <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                <button class="view-qr-btn cr-btn cr-btn-secondary text-xs py-1.5 px-3 flex-1 cursor-pointer" data-id="${d.id}" data-label="${d.label}" data-name="${d.driver_name}" data-plate="${d.van_no}" data-phone="${d.phone || ''}">
-                  🎟️ View QR Pass
+                <button class="view-qr-btn cr-btn cr-btn-secondary text-xs py-1.5 px-2.5 flex-1 cursor-pointer font-bold" data-id="${d.id}" data-label="${d.label}" data-name="${d.driver_name}" data-plate="${d.van_no}" data-phone="${d.phone || ''}">
+                  🎟️ Pass QR
+                </button>
+                <button class="view-driver-info-qr-btn cr-btn bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs py-1.5 px-2.5 flex-1 font-bold cursor-pointer" data-id="${d.id}" data-label="${d.label}" data-name="${d.driver_name}" data-plate="${d.van_no}" data-phone="${d.phone || ''}" data-type="${d.vehicle_type || '4_wheeler'}">
+                  ℹ️ Info QR
                 </button>
                 ${user.role === 'admin' ? `
                   <button class="delete-driver-btn p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer" data-id="${d.id}" data-label="${d.label}" title="Delete and renumber">
@@ -127,8 +130,11 @@ class DriversRegistryPage {
 
               <!-- Pass Actions -->
               <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                <button class="view-qr-btn cr-btn cr-btn-secondary text-xs py-1.5 px-3 flex-1 cursor-pointer" data-id="${d.id}" data-label="${d.label}" data-name="${d.driver_name}" data-plate="${d.van_no}" data-phone="${d.phone || ''}">
-                  🎟️ View QR Pass
+                <button class="view-qr-btn cr-btn cr-btn-secondary text-xs py-1.5 px-2.5 flex-1 cursor-pointer font-bold" data-id="${d.id}" data-label="${d.label}" data-name="${d.driver_name}" data-plate="${d.van_no}" data-phone="${d.phone || ''}">
+                  🎟️ Pass QR
+                </button>
+                <button class="view-driver-info-qr-btn cr-btn bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs py-1.5 px-2.5 flex-1 font-bold cursor-pointer" data-id="${d.id}" data-label="${d.label}" data-name="${d.driver_name}" data-plate="${d.van_no}" data-phone="${d.phone || ''}" data-type="${d.vehicle_type || '4_wheeler'}">
+                  ℹ️ Info QR
                 </button>
                 ${user.role === 'admin' ? `
                   <button class="delete-driver-btn p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer" data-id="${d.id}" data-label="${d.label}" title="Delete and renumber">
@@ -185,6 +191,21 @@ class DriversRegistryPage {
         const plate = btn.getAttribute('data-plate');
         const phone = btn.getAttribute('data-phone');
         DriversRegistryPage.openQRModal({ id, label, name, plate, phone });
+      };
+    });
+
+    // View Driver Info QR modal
+    document.querySelectorAll('.view-driver-info-qr-btn').forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.getAttribute('data-id');
+        const label = btn.getAttribute('data-label');
+        const name = btn.getAttribute('data-name');
+        const plate = btn.getAttribute('data-plate');
+        const phone = btn.getAttribute('data-phone');
+        const vehicle_type = btn.getAttribute('data-type');
+        if (typeof window.showDriverInfoQRModal === 'function') {
+          window.showDriverInfoQRModal({ id, label, name, plate, phone, vehicle_type });
+        }
       };
     });
 

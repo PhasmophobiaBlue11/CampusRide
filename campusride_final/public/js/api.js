@@ -133,6 +133,20 @@ class ApiClient {
     return res.user;
   }
 
+  async pinLogin(username, pin, required_role) {
+    const res = await this.request('/api/auth/pin-login', {
+      method: 'POST',
+      body: JSON.stringify({ username, email: username, pin, required_role })
+    });
+    if (required_role) {
+      localStorage.setItem(`campusride_${required_role}_token`, res.token);
+      localStorage.setItem('campusride_app_role', required_role);
+    }
+    this.setToken(res.token);
+    this.user = res.user;
+    return res.user;
+  }
+
   async fetchMe() {
     this.token = this.getToken();
     if (!this.token) return null;
@@ -160,6 +174,12 @@ class ApiClient {
     } catch {}
     const key = this.getTokenKey();
     localStorage.removeItem(key);
+    try {
+      sessionStorage.removeItem('campusride_pin_unlocked_driver');
+      sessionStorage.removeItem('campusride_pin_unlocked_parent');
+      sessionStorage.removeItem('campusride_pin_unlocked_staff');
+      sessionStorage.removeItem('campusride_pin_unlocked_admin');
+    } catch {}
     this.setToken(null);
     this.user = null;
     window.location.hash = '#/';

@@ -1,11 +1,14 @@
 // CampusRide — Dedicated Isolated App Logins (§7.1)
 // Completely separate portals with ZERO role-switch tabs or cross-role confusion.
+// Supports 4-Digit Security PIN Quick Unlock for returning devices.
 // - Driver App: #/driver or /driver
 // - Parent App: #/parent or /parent
 // - Gate Staff App: #/staff or /staff
 // - Admin Portal: #/admin or /admin
 
 class LoginPage {
+  static isPasswordMode = false;
+
   static render(role = 'staff') {
     const isDriver = role === 'driver';
     const isParent = role === 'parent';
@@ -41,28 +44,89 @@ class LoginPage {
                                 isAdmin ? 'Admin2026' :
                                 'Enter staff username';
 
-    const savedUsername = '';
+    // Check if there is a saved account for this role on this device with a PIN
+    let savedAccount = null;
+    try {
+      const stored = localStorage.getItem(`campusride_saved_account_${role}`);
+      if (stored) savedAccount = JSON.parse(stored);
+    } catch {}
 
+    // -----------------------------------------------------------
+    // SCREEN 1: 4-DIGIT PIN QUICK UNLOCK SCREEN (Returning Device)
+    // -----------------------------------------------------------
+    if (savedAccount && savedAccount.username && !LoginPage.isPasswordMode) {
+      return `
+        <div class="min-h-screen flex items-center justify-center p-4 relative z-10">
+          <div class="cr-card w-full max-w-md p-6 sm:p-8 animate-fade-in-up text-center space-y-6">
+            
+            <!-- Portal Brand Header -->
+            <div>
+              <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-tr ${portalAccent} flex items-center justify-center text-white shadow-xl text-3xl">
+                ${portalIcon}
+              </div>
+              <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">${portalTitle}</h1>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Quick Device Security PIN Unlock</p>
+            </div>
+
+            <!-- Saved Account Card -->
+            <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
+              <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Connected Account</span>
+              <div class="font-mono font-black text-base text-blue-600 dark:text-blue-400 mt-0.5">
+                @${savedAccount.username}
+              </div>
+            </div>
+
+            <!-- PIN Form -->
+            <form id="pin-login-form" data-username="${savedAccount.username}" data-role="${role}" class="space-y-4" autocomplete="off">
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Enter 4-Digit Security PIN
+                </label>
+                <input type="password" id="pin-login-input" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" autofocus class="cr-input font-mono font-black text-2xl tracking-widest text-center py-3 w-44 mx-auto block shadow-inner" placeholder="••••" autocomplete="one-time-code" />
+              </div>
+
+              <button type="submit" id="pin-unlock-submit-btn" class="cr-btn ${btnClass} w-full py-2.5 font-bold cursor-pointer shadow-md transition">
+                🔓 Unlock App
+              </button>
+            </form>
+
+            <!-- Switch to full login option -->
+            <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button type="button" id="switch-to-password-btn" class="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-white hover:underline cursor-pointer">
+                🔑 Sign in with Password / Switch Account
+              </button>
+            </div>
+
+          </div>
+        </div>
+      `;
+    }
+
+    // -----------------------------------------------------------
+    // SCREEN 2: STANDARD USERNAME & PASSWORD LOGIN FORM
+    // -----------------------------------------------------------
     const registrationCta = isDriver ? `
       <div class="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-900/50 text-xs">
         <span class="text-slate-600 dark:text-slate-400">New campus van driver?</span>
         <a href="#/register-driver" class="font-bold text-amber-700 dark:text-amber-400 hover:underline block mt-1">
-          Register Vehicle & Driver Pass →
+          Register Vehicle & Set 4-Digit PIN →
         </a>
       </div>
     ` : isParent ? `
       <div class="p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl border border-indigo-200 dark:border-indigo-900/50 text-xs">
         <span class="text-slate-600 dark:text-slate-400">New student parent?</span>
         <a href="#/register-parent" class="font-bold text-indigo-700 dark:text-indigo-400 hover:underline block mt-1">
-          Create Parent Tracking Account →
+          Create Parent Account & Set 4-Digit PIN →
         </a>
       </div>
     ` : isStaff ? `
-      <div class="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-900/50 text-xs">
-        <span class="text-slate-600 dark:text-slate-400">New gate security staff?</span>
-        <a href="#/register-staff" class="font-bold text-blue-700 dark:text-blue-400 hover:underline block mt-1">
-          Submit Staff Registration Request →
-        </a>
+      <div class="p-3.5 bg-blue-50 dark:bg-blue-950/40 rounded-2xl border border-blue-200 dark:border-blue-900/50 text-xs text-left space-y-1">
+        <div class="font-bold text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
+          <span>👔</span> <span>Common Staff Account Access:</span>
+        </div>
+        <p class="text-slate-600 dark:text-slate-400">
+          All gate security staff & teachers share a single common account created by the Administrator. Please sign in with the username, password, and 4-digit PIN given by Admin.
+        </p>
       </div>
     ` : '';
 
@@ -70,7 +134,7 @@ class LoginPage {
       <div class="min-h-screen flex items-center justify-center p-4 relative z-10">
         <div class="cr-card w-full max-w-md p-6 sm:p-8 animate-fade-in-up">
           
-          <!-- App Brand Header (NO Role Tabs) -->
+          <!-- App Brand Header -->
           <div class="text-center mb-6">
             <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-tr ${portalAccent} flex items-center justify-center text-white shadow-xl text-3xl">
               ${portalIcon}
@@ -87,7 +151,7 @@ class LoginPage {
                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Username</label>
                 <a href="#/forgot-username${role ? '?role=' + role : ''}" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">Forgot?</a>
               </div>
-              <input type="text" id="login-username" required class="cr-input" placeholder="${usernamePlaceholder}" value="" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" />
+              <input type="text" id="login-username" required class="cr-input" placeholder="${usernamePlaceholder}" value="${savedAccount?.username || ''}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" />
             </div>
 
             <div>
@@ -108,7 +172,15 @@ class LoginPage {
             </button>
           </form>
 
-          <!-- Dedicated Single Registration Option -->
+          ${savedAccount && savedAccount.username ? `
+            <div class="mt-3 text-center">
+              <button type="button" id="switch-to-pin-btn" class="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
+                🔒 Unlock with 4-Digit PIN instead
+              </button>
+            </div>
+          ` : ''}
+
+          <!-- Dedicated Registration Notice / Link -->
           <div class="mt-6 pt-5 border-t border-slate-200 dark:border-slate-800 text-center space-y-3">
             ${registrationCta}
           </div>
@@ -119,7 +191,62 @@ class LoginPage {
   }
 
   static attachEvents() {
-    // Password toggle
+    // 1. PIN Quick Unlock Form Handler
+    const pinForm = document.getElementById('pin-login-form');
+    if (pinForm) {
+      const pinInput = document.getElementById('pin-login-input');
+      const submitBtn = document.getElementById('pin-unlock-submit-btn');
+
+      pinForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const pin = pinInput.value.trim();
+        const username = pinForm.getAttribute('data-username');
+        const role = pinForm.getAttribute('data-role');
+
+        if (!pin || pin.length !== 4) {
+          return window.showToast('Please enter your 4-digit PIN', 'error');
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Unlocking...';
+
+        try {
+          const user = await window.api.pinLogin(username, pin, role);
+          window.showToast(`Unlocked as @${username}!`, 'success');
+
+          // Mark unlocked in current device session
+          sessionStorage.setItem(`campusride_pin_unlocked_${role}`, 'true');
+
+          // Save active role and reload into app
+          localStorage.setItem('campusride_app_role', role);
+          window.location.hash = '#/';
+          window.location.reload();
+        } catch (err) {
+          window.showToast(err.message, 'error');
+          submitBtn.disabled = false;
+          submitBtn.textContent = '🔓 Unlock App';
+          pinInput.value = '';
+          pinInput.focus();
+        }
+      };
+
+      // Switch to password mode button
+      const switchBtn = document.getElementById('switch-to-password-btn');
+      if (switchBtn) {
+        switchBtn.onclick = () => {
+          LoginPage.isPasswordMode = true;
+          const role = pinForm.getAttribute('data-role');
+          const appEl = document.getElementById('app');
+          if (appEl) {
+            appEl.innerHTML = LoginPage.render(role);
+            LoginPage.attachEvents();
+          }
+        };
+      }
+      return;
+    }
+
+    // 2. Standard Username & Password Form Handler
     const toggleBtn = document.getElementById('toggle-login-password');
     const passInput = document.getElementById('login-password');
     if (toggleBtn && passInput) {
@@ -130,7 +257,20 @@ class LoginPage {
       };
     }
 
-    // Submit handler
+    // Switch back to PIN button if present
+    const switchToPinBtn = document.getElementById('switch-to-pin-btn');
+    if (switchToPinBtn) {
+      switchToPinBtn.onclick = () => {
+        LoginPage.isPasswordMode = false;
+        const targetRole = document.getElementById('login-target-role').value;
+        const appEl = document.getElementById('app');
+        if (appEl) {
+          appEl.innerHTML = LoginPage.render(targetRole);
+          LoginPage.attachEvents();
+        }
+      };
+    }
+
     const form = document.getElementById('login-form');
     if (form) {
       form.onsubmit = async (e) => {
@@ -146,7 +286,16 @@ class LoginPage {
         try {
           const user = await window.api.login(username, password, targetRole);
           window.showToast('Signed in successfully!', 'success');
-          
+
+          // Save account for quick 4-digit PIN unlock next time on this device
+          localStorage.setItem(`campusride_saved_account_${targetRole}`, JSON.stringify({
+            username: user.username || username,
+            role: targetRole,
+            hasPin: true
+          }));
+          sessionStorage.setItem(`campusride_pin_unlocked_${targetRole}`, 'true');
+          LoginPage.isPasswordMode = false;
+
           // Remember role in session
           localStorage.setItem('campusride_app_role', targetRole);
 
@@ -160,33 +309,27 @@ class LoginPage {
         }
       };
     }
-
   }
 }
 
 // Global App Directory / Launchpad Page (§7.1)
-// Shown at the main root URL if unauthenticated, displaying direct separate links to each role's distinct app
 class AppLaunchpadPage {
   static render() {
     return `
       <div class="min-h-screen flex items-center justify-center p-4 relative z-10">
         <div class="cr-card w-full max-w-xl p-6 sm:p-8 animate-fade-in-up">
           
-          <!-- Launchpad Brand -->
           <div class="text-center mb-8">
             <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-tr from-blue-700 to-indigo-600 flex items-center justify-center text-white shadow-xl text-3xl">
               🚌
             </div>
             <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">CampusRide Network</h1>
             <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1.5 max-w-sm mx-auto">
-              Select your role below to launch your dedicated, isolated transportation application.
+              Select your role below to launch your dedicated transportation portal.
             </p>
           </div>
 
-          <!-- Separate Dedicated App Cards -->
           <div class="space-y-3.5">
-            
-            <!-- 1. Driver App Card -->
             <a href="#/driver" onclick="localStorage.setItem('campusride_app_role', 'driver')" class="block p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent hover:from-amber-500/20 border border-amber-300/40 dark:border-amber-700/40 transition group cursor-pointer shadow-sm hover:shadow-md">
               <div class="flex items-center gap-4">
                 <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 text-white flex items-center justify-center text-2xl shadow-md group-hover:scale-110 transition">
@@ -209,7 +352,6 @@ class AppLaunchpadPage {
               </div>
             </a>
 
-            <!-- 2. Parent App Card -->
             <a href="#/parent" onclick="localStorage.setItem('campusride_app_role', 'parent')" class="block p-4 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-indigo-500/5 to-transparent hover:from-indigo-500/20 border border-indigo-300/40 dark:border-indigo-700/40 transition group cursor-pointer shadow-sm hover:shadow-md">
               <div class="flex items-center gap-4">
                 <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center text-2xl shadow-md group-hover:scale-110 transition">
@@ -232,7 +374,6 @@ class AppLaunchpadPage {
               </div>
             </a>
 
-            <!-- 3. Gate Staff App Card -->
             <a href="#/staff" onclick="localStorage.setItem('campusride_app_role', 'staff')" class="block p-4 rounded-2xl bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-transparent hover:from-blue-500/20 border border-blue-300/40 dark:border-blue-700/40 transition group cursor-pointer shadow-sm hover:shadow-md">
               <div class="flex items-center gap-4">
                 <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-700 to-indigo-600 text-white flex items-center justify-center text-2xl shadow-md group-hover:scale-110 transition">
@@ -240,13 +381,13 @@ class AppLaunchpadPage {
                 </div>
                 <div class="flex-1">
                   <div class="flex items-center justify-between">
-                    <h3 class="font-bold text-slate-900 dark:text-white text-base">Gate Staff & Security Desk</h3>
+                    <h3 class="font-bold text-slate-900 dark:text-white text-base">Gate Staff Desk</h3>
                     <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
                       /staff
                     </span>
                   </div>
                   <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Campus entry/exit gate pass scanner, vehicle pass registry & daily logs.
+                    Entry/exit pass scanning, Info QR scanner, daily log audit, and student arrivals.
                   </p>
                 </div>
                 <div class="text-blue-600 dark:text-blue-400 font-bold text-lg group-hover:translate-x-1 transition">
@@ -255,13 +396,26 @@ class AppLaunchpadPage {
               </div>
             </a>
 
-          </div>
-
-          <!-- Footer Admin Access Link -->
-          <div class="mt-8 pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-400">
-            <span>Direct access for administrators:</span>
-            <a href="#/admin" onclick="localStorage.setItem('campusride_app_role', 'admin')" class="font-bold text-purple-600 dark:text-purple-400 hover:underline">
-              Master Admin Portal (/admin) →
+            <a href="#/admin" onclick="localStorage.setItem('campusride_app_role', 'admin')" class="block p-4 rounded-2xl bg-gradient-to-r from-purple-500/10 via-purple-500/5 to-transparent hover:from-purple-500/20 border border-purple-300/40 dark:border-purple-700/40 transition group cursor-pointer shadow-sm hover:shadow-md">
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-purple-700 to-indigo-700 text-white flex items-center justify-center text-2xl shadow-md group-hover:scale-110 transition">
+                  🛡️
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-slate-900 dark:text-white text-base">Master Administrator</h3>
+                    <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
+                      /admin
+                    </span>
+                  </div>
+                  <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Common staff account setup, live connected devices counter, and daily gate logs.
+                  </p>
+                </div>
+                <div class="text-purple-600 dark:text-purple-400 font-bold text-lg group-hover:translate-x-1 transition">
+                  →
+                </div>
+              </div>
             </a>
           </div>
 

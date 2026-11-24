@@ -85,6 +85,12 @@ class ParentRegisterPage {
               </div>
             </div>
 
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">4-Digit Security PIN (Quick Device Unlock)</label>
+              <input type="password" id="parent-pin" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" class="cr-input font-mono font-bold tracking-widest text-center text-base" placeholder="••••" autocomplete="off" />
+              <p class="text-[10px] text-slate-400 mt-0.5">Set a 4-digit PIN (e.g. 1234) to quickly unlock the Parent App on this phone next time.</p>
+            </div>
+
             <button type="submit" id="parent-submit-btn" class="cr-btn bg-indigo-600 hover:bg-indigo-500 text-white w-full py-2.5 mt-2 font-bold shadow-md cursor-pointer">
               Create Parent Account
             </button>
@@ -159,6 +165,7 @@ class ParentRegisterPage {
         const username = document.getElementById('parent-username').value.trim();
         const phone = document.getElementById('parent-phone').value.trim();
         const password = document.getElementById('parent-password').value;
+        const pin = document.getElementById('parent-pin').value.trim();
         const submitBtn = document.getElementById('parent-submit-btn');
 
         // Full Name Validation (Must contain at least first name and last name)
@@ -169,6 +176,10 @@ class ParentRegisterPage {
 
         if (!username || username.length < 3) {
           return window.showToast('Username must be at least 3 characters', 'error');
+        }
+
+        if (!pin || !/^\d{4}$/.test(pin)) {
+          return window.showToast('Please enter a valid 4-digit numeric Security PIN (e.g. 1234)', 'error');
         }
 
         submitBtn.disabled = true;
@@ -182,14 +193,16 @@ class ParentRegisterPage {
               username,
               phone,
               password,
+              pin,
               address: '',
               lat: 0,
               lng: 0
             })
           });
 
-          // Save device creation lock and token
+          // Save device creation lock, quick PIN account, and token
           localStorage.setItem('campusride_account_created_parent', username);
+          localStorage.setItem('campusride_saved_account_parent', JSON.stringify({ username, role: 'parent', hasPin: true }));
           localStorage.setItem('campusride_parent_token', res.token);
           localStorage.setItem('campusride_app_role', 'parent');
           window.api.setToken(res.token);

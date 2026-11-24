@@ -90,6 +90,12 @@ class DriverRegisterPage {
             </div>
 
             <div>
+              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">4-Digit Security PIN (Quick Device Unlock)</label>
+              <input type="password" id="driver-pin" required pattern="[0-9]{4}" maxlength="4" inputmode="numeric" class="cr-input font-mono font-bold tracking-widest text-center text-base" placeholder="••••" autocomplete="off" />
+              <p class="text-[10px] text-slate-400 mt-0.5">Set a 4-digit PIN (e.g. 1234) to quickly unlock the app on this phone next time.</p>
+            </div>
+
+            <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Vehicle License Plate Number</label>
               <input type="text" id="driver-van-no" required minlength="6" class="cr-input uppercase tracking-wider font-mono font-bold text-center text-base" placeholder="__  __  __  ____" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" data-lpignore="true" />
               <p class="text-[10px] text-slate-400 mt-1 text-center font-medium">Spaces fill automatically as you type (State, District, Series, Number)</p>
@@ -220,6 +226,7 @@ class DriverRegisterPage {
         const username = document.getElementById('driver-username').value.trim();
         const phone = document.getElementById('driver-phone').value.trim();
         const password = document.getElementById('driver-password').value;
+        const pin = document.getElementById('driver-pin').value.trim();
         const vehicleNo = document.getElementById('driver-van-no').value.trim();
         const vehicleType = document.getElementById('driver-vehicle-type').value;
         const submitBtn = document.getElementById('driver-submit-btn');
@@ -234,17 +241,22 @@ class DriverRegisterPage {
           return window.showToast('Username must be at least 3 characters', 'error');
         }
 
+        if (!pin || !/^\d{4}$/.test(pin)) {
+          return window.showToast('Please enter a valid 4-digit numeric Security PIN (e.g. 1234)', 'error');
+        }
+
         submitBtn.disabled = true;
         submitBtn.textContent = 'Registering vehicle...';
 
         try {
           const res = await window.api.request('/api/auth/register-driver', {
             method: 'POST',
-            body: JSON.stringify({ fullName, username, phone, password, vehicleNo, vehicleType })
+            body: JSON.stringify({ fullName, username, phone, password, pin, vehicleNo, vehicleType })
           });
 
-          // Save device creation lock and token
+          // Save device creation lock, quick PIN account, and token
           localStorage.setItem('campusride_account_created_driver', username);
+          localStorage.setItem('campusride_saved_account_driver', JSON.stringify({ username, role: 'driver', hasPin: true }));
           localStorage.setItem('campusride_driver_token', res.token);
           localStorage.setItem('campusride_app_role', 'driver');
           window.api.setToken(res.token);

@@ -144,14 +144,25 @@ class StaffHomePage {
           </a>
         </div>
 
-        <!-- Quick Access Feature Grid (3 Core Cards: Pass Scanner, Working Staffs, Daily Log Register) -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <!-- Quick Access Feature Grid (4 Core Cards: Pass Scanner, Info QR Scanner, Working Staffs, Daily Log Register) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <a href="#/entry-exit-scanner" class="cr-card p-5 no-underline text-inherit group hover:border-blue-500 transition">
             <div class="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition">
               📷
             </div>
             <h3 class="font-bold text-base text-slate-900 dark:text-white mb-1">Pass Scanner</h3>
             <p class="text-xs text-slate-500 dark:text-slate-400">Scan driver and staff pass QRs with auto-alternation check.</p>
+          </a>
+
+          <a href="#/info-scanner" class="cr-card p-5 no-underline text-inherit group hover:border-indigo-500 transition relative overflow-hidden bg-gradient-to-br from-indigo-500/5 to-transparent border-indigo-200 dark:border-indigo-900/60">
+            <div class="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition">
+              ℹ️
+            </div>
+            <div class="flex items-center gap-1.5">
+              <h3 class="font-bold text-base text-slate-900 dark:text-white mb-1">Info QR Scanner</h3>
+              <span class="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-indigo-600 text-white">NEW</span>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Scan driver info QR to verify if van arrived, left, or not yet entered.</p>
           </a>
 
           <a href="#/working-staff" class="cr-card p-5 no-underline text-inherit group hover:border-emerald-500 transition">

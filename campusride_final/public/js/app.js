@@ -211,6 +211,19 @@
       return;
     }
 
+    // 4-Digit Security PIN Gate for Returning Devices (§Quick Unlock)
+    if (activeApp && !window.LoginPage.isPasswordMode) {
+      const savedAccountJson = localStorage.getItem(`campusride_saved_account_${activeApp}`);
+      const isPinUnlocked = sessionStorage.getItem(`campusride_pin_unlocked_${activeApp}`) === 'true';
+      if (savedAccountJson && !isPinUnlocked) {
+        localStorage.setItem('campusride_app_role', activeApp);
+        appEl.innerHTML = window.LoginPage.render(activeApp);
+        window.LoginPage.attachEvents();
+        if (window.i18n) window.i18n.translateDOM();
+        return;
+      }
+    }
+
     // Check Authentication with Warmup Resilience
     let user = null;
     const token = window.api.getToken();
@@ -398,6 +411,9 @@
     } else if (path === '/entry-exit-scanner') {
       pageHtml = window.EntryExitScannerPage.render(user);
       attachCallback = () => window.EntryExitScannerPage.attachEvents(user);
+    } else if (path === '/info-scanner') {
+      pageHtml = window.InfoScannerPage.render(user);
+      attachCallback = () => window.InfoScannerPage.attachEvents(user);
     } else if (path === '/registration-scanner') {
       pageHtml = window.RegistrationScannerPage.render(user);
       attachCallback = () => window.RegistrationScannerPage.attachEvents(user);

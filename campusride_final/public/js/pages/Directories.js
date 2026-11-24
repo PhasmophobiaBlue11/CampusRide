@@ -317,13 +317,17 @@ class DirectoriesPage {
 
                 <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
                   ${d.phone ? `
-                    <a href="tel:${d.phone}" class="cr-btn bg-amber-500 hover:bg-amber-400 text-white flex-1 py-1.5 text-xs text-center font-bold">
-                      📞 Call Driver
+                    <a href="tel:${d.phone}" class="cr-btn bg-amber-500 hover:bg-amber-400 text-white px-2.5 py-1.5 text-xs text-center font-bold">
+                      📞 Call
                     </a>
                   ` : ''}
                   <button type="button" class="dir-view-driver-pass-btn cr-btn cr-btn-secondary flex-1 py-1.5 text-xs text-center cursor-pointer select-none"
                           data-id="${d.id}" data-label="${d.label}" data-name="${d.driver_name}" data-plate="${d.van_no}" data-phone="${d.phone || ''}">
-                    🎟️ View Pass
+                    🎟️ Pass QR
+                  </button>
+                  <button type="button" class="dir-view-driver-info-btn cr-btn bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex-1 py-1.5 text-xs text-center font-bold cursor-pointer select-none"
+                          data-id="${d.id}" data-label="${d.label}" data-name="${d.driver_name}" data-plate="${d.van_no}" data-phone="${d.phone || ''}" data-type="${d.vehicle_type || '4_wheeler'}">
+                    ℹ️ Info QR
                   </button>
                 </div>
               </div>
@@ -1067,11 +1071,32 @@ class DirectoriesPage {
       }
     };
 
+    const openDriverInfo = (btn) => {
+      if (!btn) return;
+      const id = btn.getAttribute('data-id');
+      const label = btn.getAttribute('data-label');
+      const name = btn.getAttribute('data-name');
+      const plate = btn.getAttribute('data-plate');
+      const phone = btn.getAttribute('data-phone');
+      const vehicle_type = btn.getAttribute('data-type');
+      if (typeof window.showDriverInfoQRModal === 'function') {
+        window.showDriverInfoQRModal({ id, label, name, plate, phone, vehicle_type });
+      }
+    };
+
     const viewDriverBtns = document.querySelectorAll('.dir-view-driver-pass-btn');
     viewDriverBtns.forEach(btn => {
       btn.onclick = (e) => {
         e.stopPropagation();
         openDriverPass(btn);
+      };
+    });
+
+    const viewDriverInfoBtns = document.querySelectorAll('.dir-view-driver-info-btn');
+    viewDriverInfoBtns.forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        openDriverInfo(btn);
       };
     });
 
@@ -1098,6 +1123,12 @@ class DirectoriesPage {
         if (dBtn) {
           e.stopPropagation();
           openDriverPass(dBtn);
+          return;
+        }
+        const infoBtn = e.target.closest('.dir-view-driver-info-btn');
+        if (infoBtn) {
+          e.stopPropagation();
+          openDriverInfo(infoBtn);
           return;
         }
       });

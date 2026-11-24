@@ -452,6 +452,107 @@ window.showPassModal = function({ id, label, name, plate, phone, type }) {
 window.showDriverPassQRModal = window.showPassModal;
 window.showStaffPassQRModal = window.showPassModal;
 
+window.showDriverInfoQRModal = function({ id, label, name, phone, plate, vehicle_type }) {
+  const driverId = id || label;
+  const cleanLabel = label || 'Campus Van';
+  const cleanName = name || 'Driver';
+  const cleanPhone = phone || '';
+  const cleanPlate = (plate && plate !== 'Staff Pass' && plate !== 'STAFF PASS') ? plate : '';
+  const cleanVehicleType = vehicle_type || '4_wheeler';
+
+  // Construct structured JSON payload for Info QR
+  const infoPayloadObj = {
+    type: 'CAMPUSRIDE_DRIVER_INFO',
+    id: driverId,
+    label: cleanLabel,
+    name: cleanName,
+    phone: cleanPhone,
+    van_no: cleanPlate,
+    vehicle_type: cleanVehicleType
+  };
+  const payloadString = JSON.stringify(infoPayloadObj);
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=2&data=${encodeURIComponent(payloadString)}`;
+
+  // Remove any previously open modal
+  const existing = document.getElementById('campusride-info-qr-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'campusride-info-qr-modal';
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-fade-in';
+
+  const typeIcon = cleanVehicleType === '2_wheeler' ? '🛵' : '🚗';
+  const typeText = cleanVehicleType === '2_wheeler' ? '2 Wheeler' : '4 Wheeler Van';
+
+  modal.innerHTML = `
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-sm shadow-2xl p-6 space-y-4 text-center animate-fade-in-up">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+        <span class="inline-flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-md border bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800">
+          <span>ℹ️</span> <span>Driver Info QR</span>
+        </span>
+        <button id="close-info-qr-modal" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-xl font-bold p-1 cursor-pointer" title="Close">✕</button>
+      </div>
+
+      <!-- Info QR Card -->
+      <div id="printable-info-card" class="p-4 bg-white rounded-2xl border-2 border-dashed border-indigo-300 text-slate-900 space-y-3 max-w-[270px] mx-auto shadow-sm">
+        <div class="w-[200px] h-[200px] mx-auto bg-slate-50 rounded-xl flex items-center justify-center overflow-hidden">
+          <img src="${qrUrl}" width="200" height="200" alt="Driver Info QR" class="rounded-xl shadow-xs mx-auto block" 
+               onerror="window.drawQrCanvasFallback(this, '${encodeURIComponent(payloadString)}');" />
+        </div>
+        <div class="text-left bg-slate-50 rounded-xl p-2.5 text-xs space-y-1 border border-slate-200">
+          <div class="font-black text-slate-900 text-sm flex items-center justify-between">
+            <span>${cleanName}</span>
+            <span class="text-[10px] font-mono font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">${cleanLabel}</span>
+          </div>
+          <div class="text-slate-600 flex items-center gap-1">
+            <span>📞</span> <span>${cleanPhone || 'No phone'}</span>
+          </div>
+          <div class="text-slate-700 font-mono font-bold flex items-center gap-1">
+            <span>🚘</span> <span>${cleanPlate || 'No plate'}</span>
+          </div>
+          <div class="text-slate-500 text-[11px] flex items-center gap-1">
+            <span>${typeIcon}</span> <span>${typeText}</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+        Teachers & Staff scan this QR with the <b>Info QR Scanner</b> to check whether this driver has arrived on campus, departed, or not yet arrived.
+      </p>
+
+      <div class="flex items-center gap-2 pt-1">
+        <button id="print-info-qr-btn" class="cr-btn cr-btn-primary flex-1 py-2.5 text-xs font-bold cursor-pointer shadow-md flex items-center justify-center gap-1.5">
+          <span>🖨️</span> <span>Print Info QR</span>
+        </button>
+        <button id="dismiss-info-qr-btn" class="cr-btn bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2.5 px-4 text-xs font-bold cursor-pointer">
+          Close
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const closeModal = () => {
+    modal.remove();
+    document.removeEventListener('keydown', handleEsc);
+  };
+  const handleEsc = (e) => {
+    if (e.key === 'Escape') closeModal();
+  };
+  document.addEventListener('keydown', handleEsc);
+
+  modal.querySelector('#close-info-qr-modal').onclick = closeModal;
+  modal.querySelector('#dismiss-info-qr-btn').onclick = closeModal;
+  modal.onclick = (e) => {
+    if (e.target === modal) closeModal();
+  };
+
+  modal.querySelector('#print-info-qr-btn').onclick = () => {
+    window.print();
+  };
+};
+
 window.qrPayload = {
   buildPassQR: (label, name, plate, phone, id) => {
     return `CAMPUSRIDE:DRIVER:${id || label}`;
