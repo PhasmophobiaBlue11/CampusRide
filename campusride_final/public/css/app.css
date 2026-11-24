@@ -547,234 +547,318 @@ html, body {
 }
 
 /* ==========================================================================
-   Tactile Digital Keypad & Security Indicator Dots (§7.1)
+   UPI / Paytm / GPay Style 4-Digit PIN Boxes & Tactile Keypad (§7.1)
    ========================================================================== */
 
-.pin-display-wrapper {
+/* 1. The 4 PIN Input Boxes Container */
+.upi-pin-section {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin: 0.5rem 0 1rem 0;
+  margin: 0.5rem 0 1.25rem 0;
 }
 
-.pin-dots-container {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 10px 22px;
-  border-radius: 9999px;
-  background: hsla(var(--muted) / 0.55);
-  border: 1.5px solid hsla(var(--border) / 0.7);
-  min-height: 52px;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.04);
-}
-
-.pin-dot {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid hsla(var(--muted-foreground) / 0.4);
-  background-color: transparent;
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+.upi-pin-header {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 14px;
-  font-weight: 800;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 270px;
+  margin-bottom: 0.75rem;
+}
+
+.upi-pin-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: hsla(var(--foreground) / 0.85);
+  letter-spacing: 0.3px;
+}
+
+.upi-show-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.08);
+  padding: 3px 9px;
+  border-radius: 9999px;
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  cursor: pointer;
+  transition: all 0.15s ease;
   user-select: none;
 }
 
-/* Filled dot state */
-.pin-dot.filled {
-  transform: scale(1.22);
-  background-color: #2563eb;
-  border-color: #2563eb;
-  box-shadow: 0 0 14px rgba(37, 99, 235, 0.55);
+.role-driver .upi-show-btn {
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.3);
 }
 
-/* Role-specific filled dot accent glows */
-.role-driver .pin-dot.filled {
-  background-color: #f59e0b;
-  border-color: #f59e0b;
-  box-shadow: 0 0 16px rgba(245, 158, 11, 0.65);
+.role-parent .upi-show-btn {
+  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.3);
 }
 
-.role-parent .pin-dot.filled {
-  background-color: #6366f1;
-  border-color: #6366f1;
-  box-shadow: 0 0 16px rgba(99, 102, 241, 0.65);
+.role-admin .upi-show-btn {
+  color: #7c3aed;
+  background: rgba(124, 58, 237, 0.1);
+  border-color: rgba(124, 58, 237, 0.3);
 }
 
-.role-admin .pin-dot.filled {
-  background-color: #7c3aed;
-  border-color: #7c3aed;
-  box-shadow: 0 0 16px rgba(124, 58, 237, 0.65);
+.upi-show-btn:hover {
+  filter: brightness(1.1);
+  transform: scale(1.02);
 }
 
-.role-staff .pin-dot.filled {
-  background-color: #2563eb;
-  border-color: #2563eb;
-  box-shadow: 0 0 16px rgba(37, 99, 235, 0.65);
+.upi-boxes-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0 auto;
+  user-select: none;
 }
 
-/* Peek Mode: when user toggles Eye, display digits */
-.pin-dot.peek {
-  width: 28px;
-  height: 32px;
-  border-radius: 8px;
-  color: #ffffff;
-  font-size: 15px;
+/* Individual PIN Box (GPay / Paytm style) */
+.upi-pin-box {
+  width: 52px;
+  height: 58px;
+  border-radius: 12px;
+  border: 2px solid hsla(var(--border) / 0.9);
+  background: hsla(var(--card) / 0.95);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04), inset 0 1px 2px rgba(0, 0, 0, 0.02);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
   font-weight: 900;
+  color: hsl(var(--foreground));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
 }
 
-/* Shake Animation on Wrong PIN */
-.pin-dots-container.shake {
-  animation: pinKeypadShake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+.dark .upi-pin-box {
+  background: rgba(15, 23, 42, 0.7);
+  border-color: rgba(51, 65, 85, 0.9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.05);
+}
+
+/* Active box: Waiting for next digit */
+.upi-pin-box.active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.22), 0 2px 8px rgba(0, 0, 0, 0.06);
+  background: hsla(var(--card) / 1);
+}
+
+.role-driver .upi-pin-box.active {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25), 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.role-parent .upi-pin-box.active {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25), 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.role-admin .upi-pin-box.active {
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.25), 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Blinking cursor in active box */
+.upi-pin-box.active::after {
+  content: '';
+  position: absolute;
+  width: 2.5px;
+  height: 24px;
+  background-color: #2563eb;
+  border-radius: 2px;
+  animation: upiCursorBlink 1s infinite;
+}
+
+.role-driver .upi-pin-box.active::after { background-color: #f59e0b; }
+.role-parent .upi-pin-box.active::after { background-color: #6366f1; }
+.role-admin .upi-pin-box.active::after { background-color: #7c3aed; }
+
+@keyframes upiCursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Filled box state */
+.upi-pin-box.filled {
+  border-color: hsla(var(--foreground) / 0.4);
+  animation: upiBoxPop 0.14s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.upi-pin-box.filled::after {
+  display: none !important;
+}
+
+.upi-pin-bullet {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background-color: hsl(var(--foreground));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.upi-pin-digit {
+  display: inline-block;
+  font-size: 1.65rem;
+  font-weight: 800;
+  line-height: 1;
+  color: hsl(var(--foreground));
+}
+
+@keyframes upiBoxPop {
+  0% { transform: scale(0.92); }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+/* Error Shake on wrong PIN */
+.upi-boxes-row.shake {
+  animation: upiShake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+.upi-boxes-row.shake .upi-pin-box {
   border-color: #ef4444 !important;
-  background-color: rgba(239, 68, 68, 0.12) !important;
+  background-color: rgba(239, 68, 68, 0.08) !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25) !important;
 }
 
-.pin-dots-container.shake .pin-dot {
+.upi-boxes-row.shake .upi-pin-bullet {
   background-color: #ef4444 !important;
-  border-color: #ef4444 !important;
-  color: #ffffff !important;
-  box-shadow: 0 0 16px rgba(239, 68, 68, 0.7) !important;
-  transform: scale(1.18);
 }
 
-@keyframes pinKeypadShake {
+@keyframes upiShake {
   0%, 100% { transform: translateX(0); }
   20%, 60% { transform: translateX(-12px); }
   40%, 80% { transform: translateX(12px); }
 }
 
-/* Keypad Grid (3 columns x 4 rows) */
-.pin-keypad-grid {
+/* 2. Keypad Panel (Enclosure matching user's image & GPay/Paytm) */
+.upi-keypad-panel {
+  width: 100%;
+  max-width: 290px;
+  margin: 0 auto;
+  padding: 12px;
+  background: hsla(var(--muted) / 0.45);
+  border: 1.5px solid hsla(var(--border) / 0.85);
+  border-radius: 18px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.03), 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.dark .upi-keypad-panel {
+  background: rgba(15, 23, 42, 0.55);
+  border-color: rgba(51, 65, 85, 0.8);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.upi-keypad-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px 16px;
-  max-width: 275px;
-  margin: 0 auto;
+  gap: 10px;
   user-select: none;
   touch-action: manipulation;
 }
 
-.pin-key-btn {
-  position: relative;
-  width: 66px;
-  height: 66px;
-  margin: 0 auto;
-  border-radius: 50%;
-  border: 1px solid hsla(var(--border) / 0.85);
-  background: hsla(var(--card) / 0.88);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+/* Square / Squarish Keypad Key Buttons (as in the uploaded image) */
+.upi-key-btn {
+  height: 52px;
+  border-radius: 12px;
+  border: 1.5px solid hsla(var(--border) / 0.9);
+  background: hsla(var(--card) / 0.95);
+  box-shadow: 0 3px 0 hsla(var(--border) / 0.9), 0 2px 6px rgba(0, 0, 0, 0.04);
   color: hsl(var(--foreground));
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  font-size: 1.45rem;
+  font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1),
-              background-color 0.15s ease,
-              border-color 0.15s ease,
-              box-shadow 0.15s ease;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, background-color 0.12s ease;
   -webkit-tap-highlight-color: transparent;
   outline: none;
 }
 
-.pin-key-btn:hover {
-  background: hsla(var(--muted) / 0.9);
-  border-color: hsla(var(--primary) / 0.35);
+.dark .upi-key-btn {
+  background: hsla(var(--card) / 0.9);
+  border-color: rgba(71, 85, 105, 0.7);
+  box-shadow: 0 3px 0 rgba(30, 41, 59, 0.9), 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.upi-key-btn:hover {
+  background: hsla(var(--card) / 1);
   transform: translateY(-1px);
-  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.09);
+  box-shadow: 0 4px 0 hsla(var(--border) / 0.9), 0 3px 8px rgba(0, 0, 0, 0.08);
 }
 
-/* Tactile micro-press animations on tap/click/keyboard */
-.pin-key-btn:active,
-.pin-key-btn.is-active {
-  transform: scale(0.86) !important;
-  transition: transform 0.06s ease;
+/* Authentic 3D Press-Down animation on click/tap */
+.upi-key-btn:active,
+.upi-key-btn.is-active {
+  transform: translateY(3px) !important;
+  box-shadow: 0 0 0 transparent, 0 1px 2px rgba(0, 0, 0, 0.1) !important;
 }
 
-/* Role-colored active highlights */
-.role-driver .pin-key-btn:active,
-.role-driver .pin-key-btn.is-active {
+/* Role-colored active button press */
+.role-driver .upi-key-btn:active,
+.role-driver .upi-key-btn.is-active {
   background: #f59e0b !important;
-  border-color: #f59e0b !important;
   color: #ffffff !important;
-  box-shadow: 0 0 20px rgba(245, 158, 11, 0.65) !important;
+  border-color: #d97706 !important;
 }
 
-.role-parent .pin-key-btn:active,
-.role-parent .pin-key-btn.is-active {
+.role-parent .upi-key-btn:active,
+.role-parent .upi-key-btn.is-active {
   background: #6366f1 !important;
-  border-color: #6366f1 !important;
   color: #ffffff !important;
-  box-shadow: 0 0 20px rgba(99, 102, 241, 0.65) !important;
+  border-color: #4f46e5 !important;
 }
 
-.role-admin .pin-key-btn:active,
-.role-admin .pin-key-btn.is-active {
+.role-admin .upi-key-btn:active,
+.role-admin .upi-key-btn.is-active {
   background: #7c3aed !important;
-  border-color: #7c3aed !important;
   color: #ffffff !important;
-  box-shadow: 0 0 20px rgba(124, 58, 237, 0.65) !important;
+  border-color: #6d28d9 !important;
 }
 
-.role-staff .pin-key-btn:active,
-.role-staff .pin-key-btn.is-active {
+.role-staff .upi-key-btn:active,
+.role-staff .upi-key-btn.is-active {
   background: #2563eb !important;
-  border-color: #2563eb !important;
   color: #ffffff !important;
-  box-shadow: 0 0 20px rgba(37, 99, 235, 0.65) !important;
+  border-color: #1d4ed8 !important;
 }
 
-.pin-key-btn:active .pin-key-subtext,
-.pin-key-btn.is-active .pin-key-subtext {
-  color: rgba(255, 255, 255, 0.9) !important;
-}
-
-.pin-key-num {
-  font-size: 1.65rem;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.pin-key-subtext {
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  color: hsla(var(--muted-foreground) / 0.7);
-  margin-top: 1px;
-  text-transform: uppercase;
-}
-
-/* Action Keys (Peek & Backspace) */
-.pin-key-action {
-  font-size: 1.25rem;
-  background: transparent !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-  color: hsla(var(--muted-foreground) / 0.85);
-}
-
-.pin-key-action:hover {
+/* Action Keys (Clear / Backspace) */
+.upi-key-action {
+  font-size: 1.15rem;
   background: hsla(var(--muted) / 0.6) !important;
-  border-color: hsla(var(--border) / 0.4) !important;
+  border-color: hsla(var(--border) / 0.65) !important;
+  box-shadow: 0 2px 0 hsla(var(--border) / 0.65), 0 1px 4px rgba(0, 0, 0, 0.03) !important;
+  color: hsla(var(--foreground) / 0.7);
+}
+
+.upi-key-action:hover {
+  background: hsla(var(--muted) / 0.85) !important;
   color: hsl(var(--foreground)) !important;
 }
 
-.pin-key-action:active,
-.pin-key-action.is-active {
-  transform: scale(0.86) !important;
-  background: hsla(var(--muted) / 0.9) !important;
-  color: hsl(var(--foreground)) !important;
+.upi-key-action:active,
+.upi-key-action.is-active {
+  transform: translateY(2px) !important;
   box-shadow: none !important;
+  background: hsla(var(--muted) / 1) !important;
 }
+
 

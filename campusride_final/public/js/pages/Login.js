@@ -13,97 +13,73 @@ class LoginPage {
   static _keypadListener = null;
   static _audioCtx = null;
 
-  // Render on-screen tactile keypad & 4 security indicator dots
+  // Render UPI / Paytm / GPay style 4-digit PIN boxes & square-key dialer
   static renderKeypad(formId, role, isDoubleSec = false) {
     const roleClass = `role-${role || 'staff'}`;
     const prefix = isDoubleSec ? 'double-sec' : 'quick-pin';
     return `
-      <div class="pin-keypad-wrapper ${roleClass} my-1" data-target-form="${formId}">
+      <div class="upi-keypad-wrapper ${roleClass} my-1" data-target-form="${formId}">
         <input type="hidden" id="${prefix}-pin-input" name="pin" value="" />
 
-        <!-- 4 Tactile Security Indicator Dots -->
-        <div class="pin-display-wrapper">
-          <div id="${prefix}-dots" class="pin-dots-container" aria-label="PIN security indicator dots">
-            <div class="pin-dot" data-index="0"></div>
-            <div class="pin-dot" data-index="1"></div>
-            <div class="pin-dot" data-index="2"></div>
-            <div class="pin-dot" data-index="3"></div>
+        <!-- 4 Distinct UPI-Style PIN Input Boxes -->
+        <div class="upi-pin-section">
+          <div class="upi-pin-header">
+            <span class="upi-pin-label">ENTER 4-DIGIT PIN</span>
+            <button type="button" class="upi-show-btn" id="${prefix}-show-btn" title="Toggle PIN visibility">
+              <span id="${prefix}-show-icon">👁️</span> <span id="${prefix}-show-text">SHOW</span>
+            </button>
           </div>
-          <span class="text-[11px] text-slate-400 dark:text-slate-500 mt-2 font-medium">
-            Tap buttons below to enter 4-digit PIN
-          </span>
+
+          <div id="${prefix}-boxes" class="upi-boxes-row" aria-label="PIN input boxes">
+            <div class="upi-pin-box active" data-index="0"></div>
+            <div class="upi-pin-box" data-index="1"></div>
+            <div class="upi-pin-box" data-index="2"></div>
+            <div class="upi-pin-box" data-index="3"></div>
+          </div>
         </div>
 
-        <!-- 3x4 Animated Dial Keypad -->
-        <div class="pin-keypad-grid" id="${prefix}-keypad">
-          <button type="button" class="pin-key-btn" data-key="1">
-            <span class="pin-key-num">1</span>
-            <span class="pin-key-subtext">&nbsp;</span>
-          </button>
-          <button type="button" class="pin-key-btn" data-key="2">
-            <span class="pin-key-num">2</span>
-            <span class="pin-key-subtext">ABC</span>
-          </button>
-          <button type="button" class="pin-key-btn" data-key="3">
-            <span class="pin-key-num">3</span>
-            <span class="pin-key-subtext">DEF</span>
-          </button>
+        <!-- Styled Keypad Panel (Enclosure matching user's image) -->
+        <div class="upi-keypad-panel">
+          <div class="upi-keypad-grid" id="${prefix}-keypad">
+            <button type="button" class="upi-key-btn" data-key="1">1</button>
+            <button type="button" class="upi-key-btn" data-key="2">2</button>
+            <button type="button" class="upi-key-btn" data-key="3">3</button>
 
-          <button type="button" class="pin-key-btn" data-key="4">
-            <span class="pin-key-num">4</span>
-            <span class="pin-key-subtext">GHI</span>
-          </button>
-          <button type="button" class="pin-key-btn" data-key="5">
-            <span class="pin-key-num">5</span>
-            <span class="pin-key-subtext">JKL</span>
-          </button>
-          <button type="button" class="pin-key-btn" data-key="6">
-            <span class="pin-key-num">6</span>
-            <span class="pin-key-subtext">MNO</span>
-          </button>
+            <button type="button" class="upi-key-btn" data-key="4">4</button>
+            <button type="button" class="upi-key-btn" data-key="5">5</button>
+            <button type="button" class="upi-key-btn" data-key="6">6</button>
 
-          <button type="button" class="pin-key-btn" data-key="7">
-            <span class="pin-key-num">7</span>
-            <span class="pin-key-subtext">PQRS</span>
-          </button>
-          <button type="button" class="pin-key-btn" data-key="8">
-            <span class="pin-key-num">8</span>
-            <span class="pin-key-subtext">TUV</span>
-          </button>
-          <button type="button" class="pin-key-btn" data-key="9">
-            <span class="pin-key-num">9</span>
-            <span class="pin-key-subtext">WXYZ</span>
-          </button>
+            <button type="button" class="upi-key-btn" data-key="7">7</button>
+            <button type="button" class="upi-key-btn" data-key="8">8</button>
+            <button type="button" class="upi-key-btn" data-key="9">9</button>
 
-          <!-- Bottom Row: Peek Toggle, 0, Backspace -->
-          <button type="button" class="pin-key-btn pin-key-action" data-action="peek" id="${prefix}-peek-btn" title="Peek PIN digits">
-            <span class="text-xl" id="${prefix}-peek-icon">👁️</span>
-            <span class="text-[8px] font-bold uppercase tracking-wider block mt-0.5 text-slate-400" id="${prefix}-peek-text">View</span>
-          </button>
-          <button type="button" class="pin-key-btn" data-key="0">
-            <span class="pin-key-num">0</span>
-            <span class="pin-key-subtext">+</span>
-          </button>
-          <button type="button" class="pin-key-btn pin-key-action" data-action="backspace" id="${prefix}-del-btn" title="Backspace">
-            <span class="text-xl">⌫</span>
-            <span class="text-[8px] font-bold uppercase tracking-wider block mt-0.5 text-slate-400">Del</span>
-          </button>
+            <!-- Bottom row: Clear all, 0, Backspace -->
+            <button type="button" class="upi-key-btn upi-key-action" data-action="clear" id="${prefix}-clear-btn" title="Clear all digits">
+              <span class="text-base font-bold">✕</span>
+            </button>
+            <button type="button" class="upi-key-btn" data-key="0">0</button>
+            <button type="button" class="upi-key-btn upi-key-action" data-action="backspace" id="${prefix}-del-btn" title="Delete last digit">
+              <span class="text-lg">⌫</span>
+            </button>
+          </div>
         </div>
       </div>
     `;
   }
 
-  // Keypad Controller: Manages state, animations, haptics, peek, backspace & auto-submit
+  // UPI Keypad Controller: Manages 4 PIN boxes, active cursors, haptics, show/hide, & auto-submit
   static setupKeypadController({
     keypadId,
+    boxesContainerId,
     dotsContainerId,
     hiddenInputId,
+    showBtnId,
     onAutoSubmit
   }) {
     const keypadEl = document.getElementById(keypadId);
-    const dotsContainer = document.getElementById(dotsContainerId);
+    const boxesContainer = document.getElementById(boxesContainerId || dotsContainerId);
     const hiddenInput = document.getElementById(hiddenInputId);
-    if (!keypadEl || !dotsContainer) return null;
+    if (!keypadEl || !boxesContainer) return null;
 
     let currentPin = '';
     let isPeek = false;
@@ -125,8 +101,8 @@ class LoginPage {
         const osc = LoginPage._audioCtx.createOscillator();
         const gain = LoginPage._audioCtx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(520, LoginPage._audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(140, LoginPage._audioCtx.currentTime + 0.035);
+        osc.frequency.setValueAtTime(540, LoginPage._audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(160, LoginPage._audioCtx.currentTime + 0.035);
         gain.gain.setValueAtTime(0.06, LoginPage._audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, LoginPage._audioCtx.currentTime + 0.035);
         osc.connect(gain);
@@ -136,21 +112,24 @@ class LoginPage {
       } catch (_) {}
     };
 
-    const updateDots = () => {
-      const dots = dotsContainer.querySelectorAll('.pin-dot');
-      dots.forEach((dot, idx) => {
+    const updateBoxes = () => {
+      const boxes = boxesContainer.querySelectorAll('.upi-pin-box');
+      boxes.forEach((box, idx) => {
+        box.classList.remove('active', 'filled', 'peek');
+
         if (idx < currentPin.length) {
-          dot.classList.add('filled');
+          box.classList.add('filled');
           if (isPeek) {
-            dot.classList.add('peek');
-            dot.textContent = currentPin[idx];
+            box.classList.add('peek');
+            box.innerHTML = `<span class="upi-pin-digit">${currentPin[idx]}</span>`;
           } else {
-            dot.classList.remove('peek');
-            dot.textContent = '●';
+            box.innerHTML = `<span class="upi-pin-bullet"></span>`;
           }
         } else {
-          dot.classList.remove('filled', 'peek');
-          dot.textContent = '';
+          box.innerHTML = '';
+          if (idx === currentPin.length) {
+            box.classList.add('active'); // active cursor for next digit
+          }
         }
       });
       if (hiddenInput) {
@@ -163,10 +142,10 @@ class LoginPage {
       currentPin += digit;
       triggerHaptic(18);
       playClickSound();
-      updateDots();
+      updateBoxes();
 
       if (currentPin.length === 4 && typeof onAutoSubmit === 'function') {
-        // Pause 130ms so the 4th filled dot is seen before auto-submitting
+        // Pause 130ms so user visually sees 4th box filled before auto-submitting
         setTimeout(() => {
           onAutoSubmit(currentPin);
         }, 130);
@@ -178,36 +157,56 @@ class LoginPage {
       currentPin = currentPin.slice(0, -1);
       triggerHaptic(14);
       playClickSound();
-      updateDots();
+      updateBoxes();
+    };
+
+    const clearAll = () => {
+      if (currentPin.length === 0) return;
+      currentPin = '';
+      triggerHaptic(16);
+      playClickSound();
+      updateBoxes();
     };
 
     const togglePeek = () => {
       isPeek = !isPeek;
       triggerHaptic(15);
       playClickSound();
-      const peekIcon = keypadEl.querySelector('[id$="-peek-icon"]');
-      const peekText = keypadEl.querySelector('[id$="-peek-text"]');
-      if (peekIcon) peekIcon.textContent = isPeek ? '🙈' : '👁️';
-      if (peekText) peekText.textContent = isPeek ? 'Hide' : 'View';
-      updateDots();
+      const showBtn = document.getElementById(showBtnId);
+      const showIcon = showBtn?.querySelector('[id$="-show-icon"]');
+      const showText = showBtn?.querySelector('[id$="-show-text"]');
+      if (showIcon) showIcon.textContent = isPeek ? '🙈' : '👁️';
+      if (showText) showText.textContent = isPeek ? 'HIDE' : 'SHOW';
+      updateBoxes();
     };
 
+    // Attach show button listener
+    if (showBtnId) {
+      const showBtn = document.getElementById(showBtnId);
+      if (showBtn) {
+        showBtn.onclick = (e) => {
+          e.preventDefault();
+          togglePeek();
+        };
+      }
+    }
+
     const triggerErrorShake = () => {
-      dotsContainer.classList.add('shake');
+      boxesContainer.classList.add('shake');
       triggerHaptic([40, 60, 40]);
       setTimeout(() => {
-        dotsContainer.classList.remove('shake');
+        boxesContainer.classList.remove('shake');
         currentPin = '';
-        updateDots();
+        updateBoxes();
       }, 450);
     };
 
-    // Button tactile click handlers
-    const buttons = keypadEl.querySelectorAll('.pin-key-btn');
+    // Button 3D click handlers
+    const buttons = keypadEl.querySelectorAll('.upi-key-btn');
     buttons.forEach(btn => {
       const animatePress = () => {
         btn.classList.add('is-active');
-        setTimeout(() => btn.classList.remove('is-active'), 120);
+        setTimeout(() => btn.classList.remove('is-active'), 110);
       };
 
       btn.addEventListener('click', (e) => {
@@ -220,8 +219,8 @@ class LoginPage {
           addDigit(key);
         } else if (action === 'backspace') {
           removeDigit();
-        } else if (action === 'peek') {
-          togglePeek();
+        } else if (action === 'clear') {
+          clearAll();
         }
       });
     });
@@ -242,16 +241,18 @@ class LoginPage {
         const btn = keypadEl.querySelector(`button[data-key="${e.key}"]`);
         if (btn) {
           btn.classList.add('is-active');
-          setTimeout(() => btn.classList.remove('is-active'), 120);
+          setTimeout(() => btn.classList.remove('is-active'), 110);
         }
         addDigit(e.key);
       } else if (e.key === 'Backspace' || e.key === 'Delete') {
         const btn = keypadEl.querySelector('button[data-action="backspace"]');
         if (btn) {
           btn.classList.add('is-active');
-          setTimeout(() => btn.classList.remove('is-active'), 120);
+          setTimeout(() => btn.classList.remove('is-active'), 110);
         }
         removeDigit();
+      } else if (e.key === 'Escape') {
+        clearAll();
       } else if (e.key === 'Enter') {
         if (currentPin.length === 4 && typeof onAutoSubmit === 'function') {
           onAutoSubmit(currentPin);
@@ -261,14 +262,14 @@ class LoginPage {
     LoginPage._keypadListener = handleKeyDown;
     window.addEventListener('keydown', handleKeyDown);
 
-    // Initial render
-    updateDots();
+    // Initial render: box 0 active with blinking cursor
+    updateBoxes();
 
     return {
       getPin: () => currentPin,
       clearPin: () => {
         currentPin = '';
-        updateDots();
+        updateBoxes();
       },
       triggerError: triggerErrorShake
     };
@@ -734,8 +735,9 @@ class LoginPage {
 
       keypadCtrl = LoginPage.setupKeypadController({
         keypadId: 'double-sec-keypad',
-        dotsContainerId: 'double-sec-dots',
+        boxesContainerId: 'double-sec-boxes',
         hiddenInputId: 'double-sec-pin-input',
+        showBtnId: 'double-sec-show-btn',
         onAutoSubmit: (pin) => doSubmit(pin)
       });
 
@@ -799,8 +801,9 @@ class LoginPage {
 
       keypadCtrl = LoginPage.setupKeypadController({
         keypadId: 'quick-pin-keypad',
-        dotsContainerId: 'quick-pin-dots',
+        boxesContainerId: 'quick-pin-boxes',
         hiddenInputId: 'quick-pin-pin-input',
+        showBtnId: 'quick-pin-show-btn',
         onAutoSubmit: (pin) => doUnlock(pin)
       });
 
