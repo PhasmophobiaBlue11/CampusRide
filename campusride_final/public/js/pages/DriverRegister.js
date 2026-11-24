@@ -57,7 +57,7 @@ class DriverRegisterPage {
             <span class="text-3xl">🚌</span>
             <h1 class="text-xl font-bold text-slate-900 dark:text-white mt-2">Create Driver Account</h1>
             <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Register your driver credentials and vehicle to broadcast live GPS to parents.
+              Register your driver credentials and vehicle for campus transit & parent updates.
             </p>
           </div>
 

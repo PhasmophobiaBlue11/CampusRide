@@ -286,8 +286,8 @@ class LoginPage {
                         isAdmin ? 'CampusRide Admin Suite' :
                         'CampusRide Gate & Staff Desk';
 
-    const portalDesc = isDriver ? 'Van Driver Console & Live GPS Journey Broadcasting' :
-                       isParent ? 'Real-Time Van Radar, Student Tracking & Safety SOS' :
+    const portalDesc = isDriver ? 'Van Driver Console & Student Transit Management' :
+                       isParent ? 'Student Transit Status, Campus Safety & Alerts' :
                        isAdmin ? 'Master Administrator Transit Console' :
                        'Campus Security, Pass Scanning & Daily Log Desk';
 
@@ -937,7 +937,7 @@ class AppLaunchpadPage {
                     </span>
                   </div>
                   <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Van console, journey start/end, live GPS sharing & student pickup navigation.
+                    Van console, journey start/end, digital QR pass & student transit route.
                   </p>
                 </div>
                 <div class="text-amber-600 dark:text-amber-400 font-bold text-lg group-hover:translate-x-1 transition">
@@ -959,7 +959,7 @@ class AppLaunchpadPage {
                     </span>
                   </div>
                   <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Student radar, real-time Google Maps van tracking, pickup alerts & emergency SOS.
+                    Student transit status, campus arrival alerts, driver contact & emergency SOS.
                   </p>
                 </div>
                 <div class="text-indigo-600 dark:text-indigo-400 font-bold text-lg group-hover:translate-x-1 transition">

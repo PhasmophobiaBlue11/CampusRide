@@ -7,7 +7,7 @@
   "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#7c3aed",
-  "description": "Live School Van Tracking Map & Student Pickup Alerts",
+  "description": "Student Transit Status, Campus Arrival & Safety Alerts",
   "icons": [
     {
       "src": "/assets/icon-192.png",

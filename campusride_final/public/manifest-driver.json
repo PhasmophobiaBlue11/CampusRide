@@ -7,7 +7,7 @@
   "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#0284c7",
-  "description": "Driver Route, Digital QR Pass & Live GPS Broadcast",
+  "description": "Driver Route, Digital QR Pass & Student Transit Management",
   "icons": [
     {
       "src": "/assets/icon-192.png",

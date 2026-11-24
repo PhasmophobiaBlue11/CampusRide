@@ -132,7 +132,7 @@
                     <span class="text-2xl">👨‍👩‍👧</span>
                     <div>
                       <div class="text-xs font-bold text-slate-900 dark:text-white">Parent Portal</div>
-                      <div class="text-[11px] text-indigo-700 dark:text-indigo-400 font-medium">Student tracking & radar</div>
+                      <div class="text-[11px] text-indigo-700 dark:text-indigo-400 font-medium">Student transit status & safety</div>
                     </div>
                   </div>
                   <span class="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/60 px-2 py-0.5 rounded-md">/parent</span>
@@ -473,12 +473,12 @@
         </nav>
       `;
     } else if (isParent) {
-      // 👨‍👩‍👧 Parent App Navigation: Live Van Radar, Settings (Helpline removed as per requirement)
+      // 👨‍👩‍👧 Parent App Navigation: Transit Status, Settings
       bottomNavHtml = `
         <nav class="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-10 py-2.5 flex items-center justify-around text-[11px] font-bold text-slate-500 shadow-lg">
           <a href="#/" class="flex flex-col items-center gap-1 ${path === '/' || path === '' ? 'text-indigo-600 dark:text-indigo-400' : 'hover:text-slate-900 dark:hover:text-white'}">
             <span class="text-xl">👨‍👩‍👧</span>
-            <span>Van Radar</span>
+            <span>Transit Status</span>
           </a>
           <a href="#/settings" class="flex flex-col items-center gap-1 ${path === '/settings' ? 'text-indigo-600 dark:text-indigo-400' : 'hover:text-slate-900 dark:hover:text-white'}">
             <span class="text-xl">⚙️</span>

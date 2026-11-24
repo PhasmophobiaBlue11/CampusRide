@@ -6,7 +6,7 @@
   "orientation": "any",
   "background_color": "#0f172a",
   "theme_color": "#1e40af",
-  "description": "Secure campus transportation management, QR pass scanning, and live transit radar.",
+  "description": "Secure campus transportation management, QR pass scanning, and student transit tracking.",
   "icons": [
     {
       "src": "/assets/icon-192.png",
