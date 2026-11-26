@@ -103,7 +103,7 @@ function saveBackupJson() {
       children: db.prepare('SELECT * FROM children').all(),
       staff_requests: db.prepare('SELECT * FROM staff_requests').all(),
       sessions: db.prepare('SELECT * FROM sessions').all(),
-      van_logs: db.prepare('SELECT * FROM van_logs ORDER BY timestamp DESC LIMIT 100').all()
+      van_logs: db.prepare('SELECT * FROM van_logs ORDER BY timestamp DESC LIMIT 500').all()
     };
     fs.writeFileSync(BACKUP_JSON_PATH, JSON.stringify(backup, null, 2), 'utf-8');
     syncBackupToFirebase(backup);
@@ -2474,10 +2474,22 @@ const server = http.createServer(async (req, res) => {
         }
 
         // Record journey_start log
+        const startLogId = generateId('log');
         db.prepare(`
           INSERT INTO van_logs (id, qr_identifier, driver_id, driver_name, driver_label, event_type, scanned_by, timestamp)
           VALUES (?, '', ?, ?, ?, 'journey_start', ?, ?)
-        `).run(generateId('log'), van.id, van.driver_name, van.label, user.display_name || user.email, now);
+        `).run(startLogId, van.id, van.driver_name, van.label, user.display_name || user.email, now);
+
+        pushToFirebase(`van_logs/${startLogId}`, {
+          id: startLogId,
+          qr_identifier: '',
+          driver_id: van.id,
+          driver_name: van.driver_name,
+          driver_label: van.label,
+          event_type: 'journey_start',
+          scanned_by: user.display_name || user.email,
+          timestamp: now
+        });
 
         // Clear pending entry alerts
         db.prepare('DELETE FROM ride_alerts WHERE van_id = ? AND alert_type = \'entry_no_journey\'').run(van.id);
@@ -2543,10 +2555,22 @@ const server = http.createServer(async (req, res) => {
           pushToFirebase(`van_locations/${vanId}/live`, 0);
           const van = db.prepare('SELECT id, label, driver_name FROM drivers WHERE id = ?').get(vanId);
           if (van) {
+            const endLogId = generateId('log');
             db.prepare(`
               INSERT INTO van_logs (id, qr_identifier, driver_id, driver_name, driver_label, event_type, scanned_by, timestamp)
               VALUES (?, '', ?, ?, ?, 'journey_end', ?, ?)
-            `).run(generateId('log'), van.id, van.driver_name, van.label, user.display_name || user.username || user.email, now);
+            `).run(endLogId, van.id, van.driver_name, van.label, user.display_name || user.username || user.email, now);
+
+            pushToFirebase(`van_logs/${endLogId}`, {
+              id: endLogId,
+              qr_identifier: '',
+              driver_id: van.id,
+              driver_name: van.driver_name,
+              driver_label: van.label,
+              event_type: 'journey_end',
+              scanned_by: user.display_name || user.username || user.email,
+              timestamp: now
+            });
 
             // Notify parents that journey completed
             const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

@@ -1350,7 +1350,28 @@
       "last_active": 1795503913970
     }
   ],
-  "van_logs": [],
+  "van_logs": [
+    {
+      "driver_id": "drv_van_002b366bf782a3de",
+      "driver_label": "Van 1",
+      "driver_name": "Ramesh Chandan",
+      "event_type": "journey_end",
+      "id": "log_04b3af63a4e66cff",
+      "qr_identifier": "",
+      "scanned_by": "Ramesh Chandan",
+      "timestamp": "2026-11-24T16:31:23.244Z"
+    },
+    {
+      "driver_id": "drv_van_002b366bf782a3de",
+      "driver_label": "Van 1",
+      "driver_name": "Ramesh Chandan",
+      "event_type": "journey_start",
+      "id": "log_7595d4efba1c28da",
+      "qr_identifier": "",
+      "scanned_by": "Ramesh Chandan",
+      "timestamp": "2026-11-24T16:31:21.760Z"
+    }
+  ],
   "deleted_entities": [
     {
       "id": "drv_671138a4f5d08952",
