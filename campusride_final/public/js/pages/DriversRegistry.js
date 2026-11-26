@@ -409,9 +409,8 @@ class DriversRegistryPage {
         </div>
 
         <div class="py-2">
-          <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">Campus Transit Pass</div>
+          <div class="text-xs font-mono font-bold text-slate-600 dark:text-slate-400">${label}</div>
           <h3 class="text-lg font-black text-slate-900 dark:text-white mt-0.5">${name}</h3>
-          <div class="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">${plate}</div>
         </div>
 
         <!-- Rendered QR Code -->

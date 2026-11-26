@@ -86,21 +86,24 @@ window.attachPlateFormatter = function(inputEl) {
 
 window.QRUtils = QRUtils;
 
-// Single Pass Print Helper (Prints ONLY QR, Name, and Number — No extra text)
-window.printSinglePass = function({ label, name, number, id }) {
+// Single Pass Print Helper (Prints ONLY QR, Name, and Number — No vehicle details)
+window.printSinglePass = function({ label, name, number, id, payload, isInfoQr }) {
   const driverId = id || label;
-  const payload = `CAMPUSRIDE:DRIVER:${driverId}`;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=2&data=${encodeURIComponent(payload)}`;
+  const qrPayload = payload || `CAMPUSRIDE:DRIVER:${driverId}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=2&data=${encodeURIComponent(qrPayload)}`;
   const printWin = window.open('', '_blank', 'width=500,height=600');
   if (!printWin) {
     window.print();
     return;
   }
+  const cleanNum = label || number || '';
+  const titleText = isInfoQr ? `Info QR - ${cleanNum}` : `Pass - ${name || cleanNum}`;
+
   printWin.document.write(`
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Pass - ${name}</title>
+      <title>${titleText}</title>
       <style>
         @page { size: auto; margin: 15mm; }
         body {
@@ -127,25 +130,30 @@ window.printSinglePass = function({ label, name, number, id }) {
           display: block;
           margin: 0 auto 14px auto;
         }
+        .pass-num {
+          font-size: ${isInfoQr ? '22px' : '15px'};
+          font-weight: 800;
+          color: #334155;
+          margin: 0 0 ${isInfoQr ? '0' : '4px'} 0;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
         .pass-name {
           font-size: 20px;
           font-weight: 800;
-          margin: 0 0 6px 0;
-          color: #0f172a;
-        }
-        .pass-num {
-          font-size: 15px;
-          font-weight: 700;
-          color: #334155;
           margin: 0;
+          color: #0f172a;
         }
       </style>
     </head>
     <body>
       <div class="pass-card">
         <img src="${qrUrl}" alt="QR" onload="window.print();" />
-        <div class="pass-name">${name}</div>
-        <div class="pass-num">${number}</div>
+        ${isInfoQr ? `
+          <div class="pass-num">${cleanNum}</div>
+        ` : `
+          <div class="pass-num">${cleanNum}</div>
+          <div class="pass-name">${name}</div>
+        `}
       </div>
     </body>
     </html>
@@ -195,14 +203,13 @@ window.printBulkPasses = function(arg1, arg2) {
       const payload = `CAMPUSRIDE:DRIVER:${driverId}`;
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=2&data=${encodeURIComponent(payload)}`;
       const name = item.name || item.driver_name || 'Staff Member';
-      const cleanPlate = (item.van_no && item.van_no !== 'Staff Pass' && item.van_no !== 'STAFF PASS') ? item.van_no : (item.plate && item.plate !== 'Staff Pass' && item.plate !== 'STAFF PASS' ? item.plate : '');
-      const number = item.number || (item.label ? (cleanPlate ? `${item.label} • ${cleanPlate}` : item.label) : (cleanPlate || 'Pass'));
+      const labelOnly = item.label || item.number || 'Pass';
 
       cardsHtml += `
         <div class="qr-card">
           <img src="${qrUrl}" alt="QR" />
+          <div class="qr-num">${labelOnly}</div>
           <div class="qr-name">${name}</div>
-          <div class="qr-num">${number}</div>
         </div>
       `;
     });
@@ -400,15 +407,15 @@ window.showPassModal = function({ id, label, name, plate, phone, type }) {
         <button id="close-qr-pass-modal" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-xl font-bold p-1 cursor-pointer" title="Close">✕</button>
       </div>
 
-      <!-- Minimalist Pass Content: Only QR, Name, and Number -->
+      <!-- Minimalist Pass Content: Only QR, Name, and Label Number (No vehicle plate or vehicle type) -->
       <div id="printable-pass-card" class="p-4 bg-white rounded-2xl border-2 border-dashed border-slate-300 text-slate-900 space-y-3 max-w-[260px] mx-auto shadow-sm">
         <div class="w-[200px] h-[200px] mx-auto bg-slate-50 rounded-xl flex items-center justify-center overflow-hidden">
           <img src="${qrUrl}" width="200" height="200" alt="QR Pass" class="rounded-xl shadow-xs mx-auto block" 
                onerror="window.drawQrCanvasFallback(this, '${encodeURIComponent(payload)}');" />
         </div>
         <div>
+          <div class="text-xs font-mono font-bold text-slate-600 mb-0.5">${cleanLabel}</div>
           <div class="text-base font-black text-slate-900 leading-snug">${cleanName}</div>
-          <div class="text-xs font-mono font-bold text-slate-700 mt-1">${numberText}</div>
         </div>
       </div>
 
@@ -442,7 +449,7 @@ window.showPassModal = function({ id, label, name, plate, phone, type }) {
 
   modal.querySelector('#print-qr-pass-btn').onclick = () => {
     if (typeof window.printSinglePass === 'function') {
-      window.printSinglePass({ id: driverId, label: cleanLabel, name: cleanName, number: numberText, type: isStaff ? 'staff' : 'van' });
+      window.printSinglePass({ id: driverId, label: cleanLabel, name: cleanName, number: cleanLabel, type: isStaff ? 'staff' : 'van' });
     } else {
       window.print();
     }
@@ -493,26 +500,14 @@ window.showDriverInfoQRModal = function({ id, label, name, phone, plate, vehicle
         <button id="close-info-qr-modal" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-xl font-bold p-1 cursor-pointer" title="Close">✕</button>
       </div>
 
-      <!-- Info QR Card -->
+      <!-- Info QR Card (Shows ONLY Driver Number below QR) -->
       <div id="printable-info-card" class="p-4 bg-white rounded-2xl border-2 border-dashed border-indigo-300 text-slate-900 space-y-3 max-w-[270px] mx-auto shadow-sm">
         <div class="w-[200px] h-[200px] mx-auto bg-slate-50 rounded-xl flex items-center justify-center overflow-hidden">
           <img src="${qrUrl}" width="200" height="200" alt="Driver Info QR" class="rounded-xl shadow-xs mx-auto block" 
                onerror="window.drawQrCanvasFallback(this, '${encodeURIComponent(payloadString)}');" />
         </div>
-        <div class="text-left bg-slate-50 rounded-xl p-2.5 text-xs space-y-1 border border-slate-200">
-          <div class="font-black text-slate-900 text-sm flex items-center justify-between">
-            <span>${cleanName}</span>
-            <span class="text-[10px] font-mono font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">${cleanLabel}</span>
-          </div>
-          <div class="text-slate-600 flex items-center gap-1">
-            <span>📞</span> <span>${cleanPhone || 'No phone'}</span>
-          </div>
-          <div class="text-slate-700 font-mono font-bold flex items-center gap-1">
-            <span>🚘</span> <span>${cleanPlate || 'No plate'}</span>
-          </div>
-          <div class="text-slate-500 text-[11px] flex items-center gap-1">
-            <span>${typeIcon}</span> <span>${typeText}</span>
-          </div>
+        <div class="text-center pt-0.5">
+          <div class="text-lg font-black font-mono text-slate-900 tracking-wide">${cleanLabel}</div>
         </div>
       </div>
 
@@ -549,7 +544,18 @@ window.showDriverInfoQRModal = function({ id, label, name, phone, plate, vehicle
   };
 
   modal.querySelector('#print-info-qr-btn').onclick = () => {
-    window.print();
+    if (typeof window.printSinglePass === 'function') {
+      window.printSinglePass({
+        id: driverId,
+        label: cleanLabel,
+        name: '',
+        number: cleanLabel,
+        payload: payloadString,
+        isInfoQr: true
+      });
+    } else {
+      window.print();
+    }
   };
 };
 
