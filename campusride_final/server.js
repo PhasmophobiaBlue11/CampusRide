@@ -118,6 +118,20 @@ function restoreBackupJson() {
   try {
     const raw = fs.readFileSync(BACKUP_JSON_PATH, 'utf-8');
     const data = JSON.parse(raw);
+
+    // Pre-load deleted entities so they are never re-inserted
+    try {
+      const rows = db.prepare('SELECT id FROM deleted_entities').all();
+      rows.forEach(r => deletedIds.add(r.id));
+    } catch(e) {}
+    if (Array.isArray(data.deleted_entities)) {
+      data.deleted_entities.forEach(item => {
+        if (item && item.id) {
+          deletedIds.add(item.id);
+          try { db.prepare('INSERT OR IGNORE INTO deleted_entities (id, type, deleted_at) VALUES (?, ?, ?)').run(item.id, item.type || 'unknown', item.deleted_at || new Date().toISOString()); } catch(e){}
+        }
+      });
+    }
     
     // Restore users
     if (Array.isArray(data.users)) {
@@ -126,6 +140,7 @@ function restoreBackupJson() {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       for (const u of data.users) {
+        if (isDeleted(u.id)) continue;
         insertUser.run(u.id, u.username || u.email, u.email || u.username, u.password_hash, u.role || 'user', u.display_name || '', u.phone || '', u.blocked || 0, u.pin || null, u.created_at || new Date().toISOString());
         if (u.pin) {
           try { db.prepare('UPDATE users SET pin = ? WHERE id = ?').run(u.pin, u.id); } catch(e){}
@@ -140,6 +155,7 @@ function restoreBackupJson() {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       for (const d of data.drivers) {
+        if (isDeleted(d.id)) continue;
         insertDriver.run(d.id, d.label, d.type || 'van', d.driver_name || '', d.license_number || '', d.van_no || '', d.phone || '', d.vehicle_type || '4_wheeler', d.raw_data || '', d.created_at || new Date().toISOString());
         if (d.van_no && d.van_no !== 'STAFF PASS' && d.van_no !== 'Staff Pass') {
           db.prepare("UPDATE drivers SET van_no = ? WHERE id = ? AND (van_no = 'STAFF PASS' OR van_no = 'Staff Pass' OR van_no = '')").run(d.van_no, d.id);
@@ -242,7 +258,27 @@ function restoreFromFirebase() {
     } catch (err) {}
   };
 
-  // 1. Restore van logs
+  // 1. Restore deleted_entities (tombstones) from Firebase Cloud
+  fetchEndpoint('deleted_entities', (delMap) => {
+    if (delMap && typeof delMap === 'object') {
+      const insertDel = db.prepare(`
+        INSERT OR IGNORE INTO deleted_entities (id, type, deleted_at)
+        VALUES (?, ?, ?)
+      `);
+      for (const [id, val] of Object.entries(delMap)) {
+        if (id && val) {
+          deletedIds.add(id);
+          insertDel.run(id, val.type || 'unknown', val.deleted_at || new Date().toISOString());
+        }
+      }
+      try {
+        db.prepare('DELETE FROM drivers WHERE id IN (SELECT id FROM deleted_entities)').run();
+        db.prepare('DELETE FROM users WHERE id IN (SELECT id FROM deleted_entities)').run();
+      } catch (e) {}
+    }
+  });
+
+  // 2. Restore van logs
   fetchEndpoint('van_logs', (logsMap) => {
     const insertLog = db.prepare(`
       INSERT OR IGNORE INTO van_logs (id, qr_identifier, driver_id, driver_name, driver_label, event_type, scanned_by, timestamp)
@@ -255,14 +291,14 @@ function restoreFromFirebase() {
     }
   });
 
-  // 2. Restore users
+  // 3. Restore users
   fetchEndpoint('users', (usersMap) => {
     const insertUser = db.prepare(`
       INSERT OR IGNORE INTO users (id, username, email, password_hash, role, display_name, phone, blocked, pin, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const u of Object.values(usersMap)) {
-      if (u && u.id) {
+      if (u && u.id && !isDeleted(u.id)) {
         insertUser.run(u.id, u.username || u.email, u.email || u.username, u.password_hash, u.role || 'user', u.display_name || '', u.phone || '', u.blocked || 0, u.pin || null, u.created_at || new Date().toISOString());
         if (u.pin) {
           try { db.prepare('UPDATE users SET pin = ? WHERE id = ?').run(u.pin, u.id); } catch(e){}
@@ -272,43 +308,75 @@ function restoreFromFirebase() {
     console.log('[CampusRide] Cloud sync: Users verified from Firebase.');
   });
 
-  // 3. Restore driver profiles
+  // 4. Restore driver profiles
   fetchEndpoint('driver_profiles', (dpMap) => {
     const insertDp = db.prepare(`
       INSERT OR IGNORE INTO driver_profiles (id, user_id, name, phone, selected_van_id, selected_van_label)
       VALUES (?, ?, ?, ?, ?, ?)
     `);
     for (const dp of Object.values(dpMap)) {
-      if (dp && dp.id) {
+      if (dp && dp.id && !isDeleted(dp.user_id)) {
         insertDp.run(dp.id, dp.user_id, dp.name || '', dp.phone || '', dp.selected_van_id || null, dp.selected_van_label || null);
       }
     }
   });
 
-  // 4. Restore parents
+  // 5. Restore parents
   fetchEndpoint('parents', (parentsMap) => {
     const insertPar = db.prepare(`
       INSERT OR IGNORE INTO parents (id, user_id, name, phone, address, address_lat, address_lng, selected_van_id, selected_van_label)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const p of Object.values(parentsMap)) {
-      if (p && p.id) {
+      if (p && p.id && !isDeleted(p.user_id)) {
         insertPar.run(p.id, p.user_id, p.name || '', p.phone || '', p.address || '', p.address_lat || 0, p.address_lng || 0, p.selected_van_id || null, p.selected_van_label || null);
       }
     }
   });
 
-  // 5. Restore van drivers
+  // 6. Restore ALL drivers (Vans AND Staff) with full two-way reconciliation
   fetchEndpoint('drivers', (driversMap) => {
-    const insertDriver = db.prepare(`
-      INSERT OR IGNORE INTO drivers (id, label, type, driver_name, license_number, van_no, phone, vehicle_type, raw_data, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    for (const d of Object.values(driversMap)) {
-      if (d && d.id && d.type === 'van') {
-        insertDriver.run(d.id, d.label, 'van', d.driver_name || '', d.license_number || '', d.van_no || '', d.phone || '', d.vehicle_type || '4_wheeler', d.raw_data || '', d.created_at || new Date().toISOString());
+    if (!driversMap || typeof driversMap !== 'object') return;
+    const fbIds = new Set(Object.keys(driversMap));
+
+    // Purge any local driver that does not exist in Firebase or was deleted
+    const localDrivers = db.prepare('SELECT id, label FROM drivers').all();
+    for (const ld of localDrivers) {
+      if (!fbIds.has(ld.id) || isDeleted(ld.id)) {
+        console.log(`[CampusRide Cloud Sync] Purging deleted driver from local SQLite: ${ld.label} (${ld.id})`);
+        db.prepare('DELETE FROM drivers WHERE id = ?').run(ld.id);
+        db.prepare('DELETE FROM van_locations WHERE van_id = ?').run(ld.id);
       }
     }
+
+    const upsertDriver = db.prepare(`
+      INSERT INTO drivers (id, label, type, driver_name, license_number, van_no, phone, vehicle_type, raw_data, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        label = excluded.label,
+        type = excluded.type,
+        driver_name = excluded.driver_name,
+        van_no = excluded.van_no,
+        phone = excluded.phone,
+        vehicle_type = excluded.vehicle_type
+    `);
+    for (const d of Object.values(driversMap)) {
+      if (d && d.id && !isDeleted(d.id)) {
+        upsertDriver.run(
+          d.id,
+          d.label,
+          d.type || 'staff',
+          d.driver_name || '',
+          d.license_number || '',
+          d.van_no || '',
+          d.phone || '',
+          d.vehicle_type || 'walk_in',
+          d.raw_data || '',
+          d.created_at || new Date().toISOString()
+        );
+      }
+    }
+    console.log(`[CampusRide Cloud Sync] Reconciled all drivers & staff from Firebase Cloud.`);
   });
 }
 
@@ -405,6 +473,12 @@ function initDatabase() {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS deleted_entities (
+      id TEXT PRIMARY KEY,
+      type TEXT,
+      deleted_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS van_logs (
       id TEXT PRIMARY KEY,
       qr_identifier TEXT,
@@ -490,8 +564,7 @@ function initDatabase() {
   // Ensure Admin2026 is active
   ensurePermanentAdmin();
 
-  // Keep backup JSON synchronized
-  saveBackupJson();
+  // NOTE: Cloud sync reconciles from Firebase; do not synchronously push un-reconciled boot data
 }
 
 // Simple deterministic hash for demo authentication
@@ -1357,9 +1430,16 @@ const server = http.createServer(async (req, res) => {
           return sendError(res, 403, 'The Permanent Master Administrator account cannot be deleted.');
         }
 
+        markEntityDeleted(user.id, 'user');
+        deleteFromFirebase(`users/${user.id}`);
+        deleteFromFirebase(`parents/${user.id}`);
+        deleteFromFirebase(`driver_profiles/${user.id}`);
+
         // Clean up any driver van entries if this was a driver
         const dp = db.prepare('SELECT selected_van_id FROM driver_profiles WHERE user_id = ?').get(user.id);
         if (dp && dp.selected_van_id) {
+          markEntityDeleted(dp.selected_van_id, 'van');
+          deleteFromFirebase(`drivers/${dp.selected_van_id}`);
           db.prepare('DELETE FROM van_locations WHERE van_id = ?').run(dp.selected_van_id);
           db.prepare('DELETE FROM drivers WHERE id = ?').run(dp.selected_van_id);
         }
@@ -1724,6 +1804,10 @@ const server = http.createServer(async (req, res) => {
         const driverId = pathname.split('/')[3];
         const driver = db.prepare('SELECT * FROM drivers WHERE id = ?').get(driverId);
         if (!driver) return sendError(res, 404, 'Driver/Staff entry not found');
+
+        // Permanently record tombstone in local SQLite and Firebase Cloud
+        markEntityDeleted(driverId, driver.type);
+        deleteFromFirebase(`drivers/${driverId}`);
 
         // Cascade delete logs and location
         db.prepare('DELETE FROM van_logs WHERE driver_id = ?').run(driverId);
